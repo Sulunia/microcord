@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - PYTHONUNBUFFERED=1
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-local}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-24}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8000}
+      - ICE_SERVERS=${ICE_SERVERS:-}
+    restart: unless-stopped

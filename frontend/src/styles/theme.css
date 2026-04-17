@@ -1,0 +1,45 @@
+:root {
+  --avatar-size: 32px;
+  --sidebar-width: 240px;
+
+  --mc-bg: #f0f0f0;
+  --mc-bg-alt: #e8e8ec;
+  --mc-bg-input: #fff;
+  --mc-border: #a0a0a0;
+  --mc-text: #222;
+  --mc-text-secondary: #555;
+  --mc-text-muted: #888;
+  --mc-accent: #4a90d9;
+  --mc-accent-hover: #3a7bc8;
+  --mc-danger: #d44;
+  --mc-success: #3b3;
+  --mc-msg-hover: rgba(0, 120, 215, 0.06);
+  --mc-radius: 3px;
+}
+
+body {
+  background: #2e8b3a;
+  color: var(--mc-text);
+}
+
+@keyframes mc-slideInUsername {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes mc-slideInParticipant {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

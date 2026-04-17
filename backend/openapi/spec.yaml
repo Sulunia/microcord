@@ -1,0 +1,527 @@
+openapi: "3.0.3"
+info:
+  title: Microcord API
+  version: "0.3.0"
+  description: Minimal Discord-like self-hosted chat and voice API.
+
+servers:
+  - url: /api
+
+paths:
+  /auth/register:
+    post:
+      operationId: api.auth.register
+      summary: Register with username, password and server passphrase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              name: "Alice"
+              password: "secret123"
+              passphrase: "A1B2C3"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+        "403":
+          description: Invalid server passphrase
+        "409":
+          description: Username taken
+        "429":
+          description: Rate limited
+
+  /auth/login:
+    post:
+      operationId: api.auth.login
+      summary: Login with username and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+        "429":
+          description: Rate limited
+
+  /auth/me:
+    get:
+      operationId: api.auth.me
+      summary: Get current user from JWT
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+
+  /auth/status:
+    get:
+      operationId: api.auth.status
+      summary: Auth provider info
+      responses:
+        "200":
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    type: string
+                    description: "Auth provider type (e.g. local, oidc)"
+
+  /auth/ws-ticket:
+    post:
+      operationId: api.auth.ws_ticket
+      summary: Issue a one-time WebSocket ticket (requires JWT auth)
+      responses:
+        "200":
+          description: Ticket issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket:
+                    type: string
+        "401":
+          description: Not authenticated
+
+  /auth/logout:
+    post:
+      operationId: api.auth.logout
+      summary: Revoke the current JWT (server-side logout)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        "401":
+          description: Not authenticated
+
+  /users:
+    get:
+      operationId: api.users.list_users
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/{user_id}:
+    get:
+      operationId: api.users.get_user
+      summary: Get a user by ID
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+
+    patch:
+      operationId: api.users.update_user
+      summary: Update own profile
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "403":
+          description: Cannot modify another user
+        "404":
+          description: User not found
+
+  /messages:
+    get:
+      operationId: api.chat.list_messages
+      summary: Paginated message history (keyset cursor)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: cursor
+          in: query
+          description: Opaque keyset cursor from a previous response's next_cursor
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated messages with next cursor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagesResponse"
+
+    post:
+      operationId: api.chat.send_message
+      summary: Send a chat message (author derived from JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+            example:
+              content: "Hello **world**!"
+      responses:
+        "201":
+          description: Message created and broadcast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: Empty message
+        "401":
+          description: Not authenticated
+        "429":
+          description: Rate limited
+
+  /upload:
+    post:
+      operationId: api.upload.upload_file
+      summary: Upload an image file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+        "400":
+          description: No file or invalid type
+        "413":
+          description: File too large
+        "429":
+          description: Rate limited
+
+  /avatar:
+    post:
+      operationId: api.upload.upload_avatar
+      summary: Upload avatar image (JPEG/PNG/AVIF, max 1 MB)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Avatar updated, returns full user object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: No file or invalid type
+        "401":
+          description: Not authenticated
+        "413":
+          description: File too large (max 1 MB)
+
+  /voice/join:
+    post:
+      operationId: api.voice.join_voice
+      summary: Join voice channel (user derived from JWT)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceJoinResponse"
+        "400":
+          description: Unknown user
+        "401":
+          description: Not authenticated
+
+  /voice/leave:
+    post:
+      operationId: api.voice.leave_voice
+      summary: Leave voice channel (user derived from JWT)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Left voice
+        "401":
+          description: Not authenticated
+        "404":
+          description: User not in voice
+
+  /voice/participants:
+    get:
+      operationId: api.voice.get_participants
+      summary: List current voice participants
+      responses:
+        "200":
+          description: Participant list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VoiceParticipant"
+
+  /voice/config:
+    get:
+      operationId: api.voice.get_voice_config
+      summary: Get voice audio configuration
+      responses:
+        "200":
+          description: Voice config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceConfig"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      x-bearerInfoFunc: services.auth.decode_token
+
+  schemas:
+    AuthRequest:
+      type: object
+      required:
+        - name
+        - password
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+
+    RegisterRequest:
+      type: object
+      required:
+        - name
+        - password
+        - passphrase
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+        passphrase:
+          type: string
+          description: Server registration passphrase
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        tick_sound:
+          type: integer
+          minimum: 1
+          maximum: 4
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        tick_sound:
+          type: integer
+          minimum: 1
+          maximum: 4
+        created_at:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          maxLength: 4000
+        image_url:
+          type: string
+          nullable: true
+
+    MessagesResponse:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        next_cursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page; null if no more results
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        image_url:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    UploadResponse:
+      type: object
+      properties:
+        url:
+          type: string
+
+    VoiceJoinResponse:
+      type: object
+      properties:
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceParticipant"
+
+    VoiceParticipant:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    VoiceConfig:
+      type: object
+      properties:
+        ice_servers:
+          type: array
+          items:
+            type: object

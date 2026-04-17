@@ -1,0 +1,145 @@
+.message {
+  display: flex;
+  gap: 10px;
+  padding: 6px 14px 2px;
+  transition: background 0.1s;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 52px;
+}
+
+.message:hover {
+  background: var(--mc-msg-hover);
+}
+
+.avatar {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  min-width: var(--avatar-size);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: #fff;
+  margin-top: 2px;
+  border: 1px solid rgba(0,0,0,0.15);
+  overflow: hidden;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 1px;
+}
+
+.headerAnimated {
+  composes: header;
+  animation: mc-slideInUsername 0.3s ease-out both;
+}
+
+.authorName {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--mc-text);
+}
+
+.timestamp {
+  font-size: 0.72rem;
+  color: var(--mc-text-muted);
+}
+
+.content {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--mc-text-secondary);
+  word-break: break-word;
+}
+
+.content code {
+  background: var(--mc-bg-alt);
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 0.8rem;
+  border: 1px solid var(--mc-border);
+}
+
+.content a {
+  color: var(--mc-accent);
+  text-decoration: underline;
+}
+
+.content strong {
+  color: var(--mc-text);
+}
+
+.image {
+  margin-top: 6px;
+  max-width: min(400px, 100%);
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: var(--mc-radius);
+  border: 1px solid var(--mc-border);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.image:hover {
+  opacity: 0.85;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.lightboxImg {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: var(--mc-radius);
+  cursor: default;
+}
+
+/* Grouped message (continuation) - no avatar/header */
+.grouped {
+  padding: 1px 14px 1px calc(14px + var(--avatar-size) + 10px);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 24px;
+}
+
+.grouped:hover {
+  background: var(--mc-msg-hover);
+}
+
+.groupedTimestamp {
+  font-size: 0.68rem;
+  color: var(--mc-text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  min-width: 50px;
+  text-align: right;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.grouped:hover .groupedTimestamp {
+  opacity: 1;
+}

@@ -1,0 +1,6 @@
+connexion[flask,uvicorn,swagger-ui]==3.3.0
+sqlalchemy[asyncio]==2.0.49
+aiosqlite==0.22.1
+python-multipart==0.0.20
+pyjwt[crypto]==2.12.1
+bcrypt==4.3.0

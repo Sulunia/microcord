@@ -1,0 +1,90 @@
+.inputArea {
+  padding: 0 10px 10px;
+}
+
+.preview {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.previewImg {
+  max-height: 100px;
+  border-radius: var(--mc-radius);
+  border: 1px solid var(--mc-border);
+}
+
+.previewRemove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid var(--mc-border);
+  color: var(--mc-text);
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.previewRemove:hover {
+  opacity: 1;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.attachBtn {
+  width: 26px;
+  height: 26px;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.fileInput {
+  display: none;
+}
+
+.textarea {
+  flex: 1;
+  resize: none;
+  min-height: 24px;
+  max-height: 100px;
+  line-height: 1.4;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  color: var(--mc-text);
+  background: var(--mc-bg-input);
+  border: 1px solid var(--mc-border);
+  font-family: inherit;
+}
+
+.textarea::placeholder {
+  color: var(--mc-text-muted);
+}
+
+.sendBtn {
+  width: 26px;
+  height: 26px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
