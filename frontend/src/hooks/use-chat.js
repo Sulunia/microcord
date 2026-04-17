@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
-import { API_BASE, WS_URL, CHAT_PAGE_SIZE, TICK_SOUNDS } from '../constants.js';
+import { API_BASE, WS_URL, CHAT_PAGE_SIZE, TICK_SOUNDS, MEDIA_TRANSCODE } from '../constants.js';
 import { authHeaders } from './use-user.js';
+import { maybeTranscode } from '../services/media-transcode.js';
 
 const audioCache = {};
 function getTickAudio(tickSound) {
@@ -138,8 +139,9 @@ export function useChat(user) {
     let image_url = null;
 
     if (imageFile) {
+      const f = await maybeTranscode(imageFile, MEDIA_TRANSCODE);
       const form = new FormData();
-      form.append('file', imageFile);
+      form.append('file', f);
       const uploadRes = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
         headers: authHeaders(),

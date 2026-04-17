@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
-Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.3.0**.
+Minimal self-hosted Discord-like app with text chat, voice channels, screen sharing, and client-side media transcoding.
+Version **0.3.1**.
 
 ---
 
@@ -16,8 +16,8 @@ Version **0.3.0**.
 │  WebRTC mesh │         │  ├─ WS screenshare signal  │
 │              │         │  ├─ WebSocket manager      │
 │  Screenshare:│◄─P2P──►│  └─ Static /uploads        │
-│  WebRTC mesh │         └────────┬─────────────────┘
-└─────────────┘                  │
+│  WebRTC mesh │         │    (immutable Cache-Control)│
+└─────────────┘         └────────┬─────────────────┘
                           SQLite (WAL mode)
 ```
 
@@ -26,6 +26,7 @@ Version **0.3.0**.
 - **Database** — SQLite with WAL mode, single-writer asyncio queue for mutations, separate async session pool for reads.
 - **Voice** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay; audio flows directly between browsers via RTCPeerConnection.
 - **Screen sharing** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay over the existing WebSocket.
+- **Media transcoding** — Client-side re-encoding before upload: images → AVIF via `@jsquash/avif` (WASM), animated GIFs → H.264 MP4 via WebCodecs + `mp4-muxer`. Server accepts AVIF and MP4 in addition to original formats. Static uploads served with immutable cache headers.
 
 ---
 
@@ -70,17 +71,19 @@ microcord/
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.js          # Preact preset, proxy to backend container
-│   ├── ui.config.js            # App name, voice channel name, screenshare resolution
+│   ├── ui.config.js            # App name, voice channel name, screenshare resolution, media transcoding config
 │   ├── index.html
 │   └── src/
 │       ├── main.jsx            # Mount <App />, import global styles
 │       ├── app.jsx             # Shell: login vs main window, hook composition, resizable sidebar
-│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size
+│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size, MEDIA_TRANSCODE
 │       ├── hooks/
 │       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
-│       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref
+│       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, media transcoding before upload
 │       │   ├── use-voice.js    # Voice join/leave, WebRTC mesh for P2P audio, per-user GainNode volume
 │       │   └── use-screenshare.js  # WebRTC mesh, signaling over shared WS
+│       ├── services/
+│       │   └── media-transcode.js  # maybeTranscode(): AVIF/MP4 encoding, size cap enforcement
 │       ├── components/
 │       │   ├── login-screen.jsx
 │       │   ├── sidebar/
@@ -89,9 +92,11 @@ microcord/
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
 │       │   │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split
-│       │   │   ├── message.jsx             # Single message: markdown (snarkdown + DOMPurify), images
-│       │   │   ├── message-input.jsx       # Compose bar with upload
-│       │   │   └── *.module.css
+│       │   │   ├── message.jsx             # Single message: markdown (snarkdown + DOMPurify), images, inline video (.mp4)
+│       │   │   ├── message-input.jsx       # Compose bar with image/video upload, config-driven size caps
+│   ├── services/
+│   │   │   │   └── media-transcode.js  # Client-side AVIF/MP4 transcoding
+│   │   │   └── *.module.css
 │       │   └── screenshare/
 │       │       ├── screenshare-view.jsx    # Video element, fullscreen, volume
 │       │       └── screenshare-view.module.css
@@ -99,7 +104,7 @@ microcord/
 │           ├── theme.css       # Dark-mode CSS custom properties
 │           └── reset.css
 ├── data/                       # (gitignored) SQLite DB, .jwt_secret
-└── uploads/                    # (gitignored) Uploaded images
+└── uploads/                    # (gitignored) Uploaded images and videos (UUID filenames, immutable cache)
 ```
 
 ---
@@ -121,7 +126,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | PATCH | `/api/users/{id}` | `api.users.update_user` | Update own display_name (IDOR-protected) |
 | GET | `/api/messages` | `api.chat.list_messages` | Paginated history (`?limit=&cursor=`) |
 | POST | `/api/messages` | `api.chat.send_message` | Send message (author from JWT, broadcasts via WS). Rate limited: 10/10s/user |
-| POST | `/api/upload` | `api.upload.upload_file` | Upload image (max 50 MB, magic-byte validated). Rate limited: 5/min/user |
+| POST | `/api/upload` | `api.upload.upload_file` | Upload image/video (PNG/JPEG/GIF/WebP/AVIF/MP4, max 50 MB, magic-byte validated). Rate limited: 5/min/user |
 | POST | `/api/avatar` | `api.upload.upload_avatar` | Upload avatar (max 1 MB, JPEG/PNG/AVIF). Rate limited: 5/min/user |
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
 | POST | `/api/voice/leave` | `api.voice.leave_voice` | Leave voice channel |
@@ -220,6 +225,8 @@ Starlette is provided transitively through Connexion.
 | `dompurify ^3.2.4` | HTML sanitization for rendered markdown |
 | `snarkdown ^2.0.0` | Lightweight markdown → HTML |
 | `animejs ^4.3.6` | Animations |
+| `@jsquash/avif ^1.4.0` | AVIF image encoding (WASM, lazy-loaded) |
+| `mp4-muxer ^5.2.0` | MP4 container muxing for GIF→video conversion |
 | `vite ^6.3.1` (dev) | Build tool / dev server |
 | `@preact/preset-vite ^2.9.4` (dev) | Preact integration for Vite |
 
@@ -248,13 +255,20 @@ Starlette is provided transitively through Connexion.
 4. Clients receive and render in real time; `use-chat.js` appends to local message list.
 5. Pagination: `GET /api/messages?limit=30&before=<uuid>` fetches older pages on scroll-up.
 
-### Image upload
+### Media upload & transcoding
 
-1. Client `POST /api/upload` with multipart file.
-2. Backend validates file extension + magic bytes (PNG/JPEG/GIF/WEBP).
-3. File saved to `uploads/` with a UUID filename.
-4. Returns `{ url: "/uploads/<uuid>.<ext>" }`.
-5. Client includes `image_url` in the subsequent `POST /api/messages`.
+1. Client selects an image or video file in `message-input.jsx`.
+2. File size is validated against config-driven caps: 14 MB for images, 70 MB for video/GIF (when `mediaTranscode.enabled`); 50 MB universal cap when disabled.
+3. Before upload, `maybeTranscode()` in `media-transcode.js` re-encodes:
+   - Images (non-GIF) → AVIF via `@jsquash/avif` WASM. Fallback: WebP via OffscreenCanvas.
+   - Animated GIFs → H.264 MP4 via `ImageDecoder` + `VideoEncoder` (WebCodecs) + `mp4-muxer`. Fallback: original GIF.
+4. If transcoded output is larger than the original, the original is kept (subject to 50 MB cap).
+5. Client `POST /api/upload` with the (possibly transcoded) file.
+6. Backend validates extension + magic bytes (PNG/JPEG/GIF/WebP/AVIF/MP4).
+7. File saved to `uploads/` with a UUID filename, served with `Cache-Control: immutable`.
+8. Returns `{ url: "/uploads/<uuid>.<ext>" }`.
+9. Client includes `image_url` in the subsequent `POST /api/messages`.
+10. Frontend renders `.mp4` URLs as `<video autoplay loop muted playsinline>` with lightbox support.
 
 ### Voice
 
@@ -329,7 +343,7 @@ In production, frontend and backend share the same origin, so `CORS_ORIGIN` shou
 | Host Path | Container Path | Contents |
 |-----------|----------------|----------|
 | `./data/` | `/app/data` | SQLite DB (`microcord.db`), JWT secret (`.jwt_secret`) |
-| `./uploads/` | `/app/uploads` | Uploaded images |
+| `./uploads/` | `/app/uploads` | Uploaded images and videos |
 
 Both directories are gitignored. See README for backup/restore instructions.
 
@@ -350,8 +364,8 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Registration passphrase | 6-digit hex uppercase secret required to register; auto-generated and logged on startup, override via `REGISTRATION_PASSPHRASE` env var |
 | WS message size limit | Inbound WebSocket messages exceeding 64 KB are dropped |
 | CORS lockdown | Restricted to `CORS_ORIGIN` (default `http://localhost:5173`) |
-| Upload validation | File extension check + magic byte verification (PNG/JPEG/GIF/WEBP) |
-| Upload size limits | Chat images: 50 MB (`MAX_UPLOAD_SIZE_BYTES`), avatars: 1 MB (`MAX_AVATAR_SIZE_BYTES`) |
+| Upload validation | File extension check + magic byte verification (PNG/JPEG/GIF/WEBP/AVIF/MP4) |
+| Upload size limits | Chat images: 50 MB (`MAX_UPLOAD_SIZE_BYTES`), avatars: 1 MB (`MAX_AVATAR_SIZE_BYTES`). Client-side caps: 14 MB images / 70 MB video (when transcoding enabled) |
 | Image URL validation | Only `/uploads/`-prefixed URLs accepted in messages and avatars |
 | Password storage | bcrypt hashing via `bcrypt >=4.0` |
 | Single-writer DB | All mutations through asyncio queue — prevents SQLite concurrent-write corruption |

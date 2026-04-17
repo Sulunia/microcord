@@ -15,7 +15,7 @@ from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".mp4"}
 
 MAGIC_BYTES = {
     b"\x89PNG": {".png"},
@@ -25,6 +25,12 @@ MAGIC_BYTES = {
 
 WEBP_MAGIC = b"RIFF"
 WEBP_SIGNATURE = b"WEBP"
+
+AVIF_MAGIC_OFFSET = 4
+AVIF_MAGIC = b"ftypavif"
+AVIS_MAGIC = b"ftypavis"
+MP4_MAGIC_OFFSET = 4
+MP4_MAGIC = b"ftyp"
 
 AVATAR_ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".avif"}
 
@@ -44,6 +50,11 @@ def _validate_magic(contents: bytes, ext: str) -> bool:
             return ext in exts
     if ext == ".webp" and len(contents) >= 12:
         return contents[:4] == WEBP_MAGIC and contents[8:12] == WEBP_SIGNATURE
+    if ext == ".avif" and len(contents) >= 12:
+        box = contents[AVIF_MAGIC_OFFSET:AVIF_MAGIC_OFFSET + 8]
+        return box in (AVIF_MAGIC, AVIS_MAGIC)
+    if ext == ".mp4" and len(contents) >= 8:
+        return contents[MP4_MAGIC_OFFSET:MP4_MAGIC_OFFSET + 4] == MP4_MAGIC
     return False
 
 
