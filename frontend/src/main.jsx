@@ -7,3 +7,7 @@ import { App } from './app.jsx';
 
 document.title = TITLE_TAG;
 render(<App />, document.getElementById('app'));
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
