@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: Microcord API
-  version: "0.3.1"
+  version: "0.3.0"
   description: Minimal Discord-like self-hosted chat and voice API.
 
 servers:
@@ -244,7 +244,7 @@ paths:
   /upload:
     post:
       operationId: api.upload.upload_file
-      summary: Upload an image or video file (PNG, JPEG, GIF, WebP, AVIF, MP4)
+      summary: Upload an image file
       requestBody:
         required: true
         content:
@@ -265,7 +265,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/UploadResponse"
         "400":
-          description: No file or invalid type (allowed: PNG, JPEG, GIF, WebP, AVIF, MP4)
+          description: No file or invalid type
         "413":
           description: File too large
         "429":

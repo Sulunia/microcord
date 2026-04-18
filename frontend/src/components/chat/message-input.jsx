@@ -1,21 +1,9 @@
 import { useState, useRef } from 'preact/hooks';
 import styles from './message-input.module.css';
 import { AlertModal } from '../alert-modal.jsx';
-import { MEDIA_TRANSCODE } from '../../constants.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
-
-function getMaxBytes(file) {
-  const cfg = MEDIA_TRANSCODE;
-  if (!cfg.enabled) return cfg.maxOutputBytes;
-  const isVideo = file.type === 'image/gif' || file.type.startsWith('video/');
-  return isVideo ? cfg.maxVideoInputBytes : cfg.maxImageInputBytes;
-}
-
-function sizeLabel(bytes) {
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1 ? `${Math.round(mb)} MB` : `${Math.round(bytes / 1024)} KB`;
-}
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
 export function MessageInput({ onSend }) {
   const [text, setText] = useState('');
@@ -39,9 +27,8 @@ export function MessageInput({ onSend }) {
         e.preventDefault();
         const file = item.getAsFile();
         if (!file) return;
-        const max = getMaxBytes(file);
-        if (file.size > max) {
-          setAlertMsg(`Image is too large (max ${sizeLabel(max)}).`);
+        if (file.size > MAX_IMAGE_BYTES) {
+          setAlertMsg('Image attachment is too big to be sent (max 50 MB).');
           return;
         }
         setImageFile(file);
@@ -59,34 +46,22 @@ export function MessageInput({ onSend }) {
       setAlertMsg(`Chat message is too large (max ${MAX_MESSAGE_LENGTH.toLocaleString()} characters).`);
       return;
     }
-    try {
-      await onSend(text, imageFile);
-      setText('');
-      clearImage();
-    } catch (e) {
-      if (e.name === 'TranscodeError') {
-        setAlertMsg(e.message);
-      }
-    }
+    await onSend(text, imageFile);
+    setText('');
+    clearImage();
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const max = getMaxBytes(file);
-    if (file.size > max) {
-      const isVideo = file.type === 'image/gif' || file.type.startsWith('video/');
-      setAlertMsg(`${isVideo ? 'Video/GIF' : 'Image'} is too large (max ${sizeLabel(max)}).`);
+    if (file.size > MAX_IMAGE_BYTES) {
+      setAlertMsg('Image attachment is too big to be sent (max 50 MB).');
       return;
     }
     setImageFile(file);
-    if (file.type.startsWith('video/')) {
-      setImagePreview(null);
-    } else {
-      const reader = new FileReader();
-      reader.onload = () => setImagePreview(reader.result);
-      reader.readAsDataURL(file);
-    }
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
   };
 
   const clearImage = () => {
@@ -97,13 +72,9 @@ export function MessageInput({ onSend }) {
 
   return (
     <div class={styles.inputArea}>
-      {(imagePreview || imageFile) && (
+      {imagePreview && (
         <div class={styles.preview}>
-          {imagePreview ? (
-            <img src={imagePreview} alt="preview" class={styles.previewImg} />
-          ) : (
-            <span class={styles.previewLabel}>{imageFile?.name}</span>
-          )}
+          <img src={imagePreview} alt="preview" class={styles.previewImg} />
           <div class={styles.previewRemove} onClick={clearImage}>✕</div>
         </div>
       )}
@@ -111,13 +82,13 @@ export function MessageInput({ onSend }) {
         <button
           class={styles.attachBtn}
           onClick={() => fileRef.current?.click()}
-          title="Attach image or video"
+          title="Attach image"
         >
           📎
         </button>
         <input
           type="file"
-          accept="image/*,video/mp4"
+          accept="image/*"
           ref={fileRef}
           class={styles.fileInput}
           onChange={handleFileChange}
