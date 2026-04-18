@@ -26,50 +26,11 @@ function avatarColor(name) {
 
 const sanitizeOptions = { USE_PROFILES: { html: true }, FORBID_TAGS: ['style'], FORBID_ATTR: ['style'] };
 
-function Lightbox({ src, isVideo, onClose }) {
+function Lightbox({ src, onClose }) {
   return (
     <div class={styles.lightbox} onClick={onClose}>
-      {isVideo ? (
-        <video
-          class={styles.lightboxVideo}
-          src={src}
-          autoplay
-          loop
-          muted
-          playsinline
-          controls
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <img class={styles.lightboxImg} src={src} alt="preview" onClick={(e) => e.stopPropagation()} />
-      )}
+      <img class={styles.lightboxImg} src={src} alt="preview" onClick={(e) => e.stopPropagation()} />
     </div>
-  );
-}
-
-function MediaAttachment({ src, onPreview }) {
-  if (src && /\.mp4(\?|$)/i.test(src)) {
-    return (
-      <video
-        class={styles.video}
-        src={src}
-        autoplay
-        loop
-        muted
-        playsinline
-        onClick={() => onPreview(true)}
-      />
-    );
-  }
-  return (
-    <img
-      class={styles.image}
-      src={src}
-      alt="attachment"
-      loading="lazy"
-      decoding="async"
-      onClick={() => onPreview(false)}
-    />
   );
 }
 
@@ -81,18 +42,26 @@ function MessageInner({ message, grouped, animate }) {
     () => DOMPurify.sanitize(snarkdown(content || ''), sanitizeOptions),
     [content],
   );
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState(false);
 
   const ts = created_at ? new Date(created_at).getTime() : (timestamp || Date.now());
   const imgSrc = image_url || image;
-  const isVideoPreview = preview === true;
 
   if (grouped) {
     return (
       <div class={styles.grouped}>
         {content && <div class={styles.content} dangerouslySetInnerHTML={{ __html: html }} />}
-        {imgSrc && <MediaAttachment src={imgSrc} onPreview={setPreview} />}
-        {preview !== null && createPortal(<Lightbox src={imgSrc} isVideo={isVideoPreview} onClose={() => setPreview(null)} />, document.body)}
+        {imgSrc && (
+          <img
+            class={styles.image}
+            src={imgSrc}
+            alt="attachment"
+            loading="lazy"
+            decoding="async"
+            onClick={() => setPreview(true)}
+          />
+        )}
+        {preview && createPortal(<Lightbox src={imgSrc} onClose={() => setPreview(false)} />, document.body)}
       </div>
     );
   }
@@ -110,9 +79,18 @@ function MessageInner({ message, grouped, animate }) {
           <span class={styles.timestamp} title={new Date(ts).toLocaleString()}>{formatTimestamp(ts)}</span>
         </div>
         {content && <div class={styles.content} dangerouslySetInnerHTML={{ __html: html }} />}
-        {imgSrc && <MediaAttachment src={imgSrc} onPreview={setPreview} />}
+        {imgSrc && (
+          <img
+            class={styles.image}
+            src={imgSrc}
+            alt="attachment"
+            loading="lazy"
+            decoding="async"
+            onClick={() => setPreview(true)}
+          />
+        )}
       </div>
-      {preview !== null && createPortal(<Lightbox src={imgSrc} isVideo={isVideoPreview} onClose={() => setPreview(null)} />, document.body)}
+      {preview && createPortal(<Lightbox src={imgSrc} onClose={() => setPreview(false)} />, document.body)}
     </div>
   );
 }

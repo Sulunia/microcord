@@ -38,11 +38,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (url.pathname.startsWith('/uploads/')) {
-    event.respondWith(cacheFirst(request));
-    return;
-  }
-
   event.respondWith(staleWhileRevalidate(request));
 });
 

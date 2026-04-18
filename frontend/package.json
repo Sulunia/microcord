@@ -10,9 +10,7 @@
   "dependencies": {
     "7.css": "0.21.1",
     "animejs": "4.3.6",
-    "@jsquash/avif": "1.4.0",
     "dompurify": "3.2.4",
-    "mp4-muxer": "5.2.0",
     "preact": "10.25.4",
     "snarkdown": "2.0.0"
   },

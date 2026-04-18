@@ -26,17 +26,6 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 FRONTEND_DIR = Path("static/frontend")
 
 
-class ImmutableStaticFiles(StaticFiles):
-    async def __call__(self, scope, receive, send):
-        async def _send(message):
-            if message.get("type") == "http.response.start":
-                headers = list(message.get("headers", []))
-                headers.append((b"cache-control", b"public, max-age=31536000, immutable"))
-                message["headers"] = headers
-            await send(message)
-        await super().__call__(scope, receive, _send)
-
-
 @asynccontextmanager
 async def lifespan(_app):
     from models.base import init_db
@@ -52,7 +41,7 @@ async def lifespan(_app):
 
 routes = [
     WebSocketRoute("/ws", websocket_endpoint),
-    Mount("/uploads", app=ImmutableStaticFiles(directory=UPLOAD_DIR)),
+    Mount("/uploads", app=StaticFiles(directory=UPLOAD_DIR)),
     Mount("/", app=connexion_app),
 ]
 
@@ -68,7 +57,7 @@ if FRONTEND_DIR.is_dir():
 
     routes = [
         WebSocketRoute("/ws", websocket_endpoint),
-        Mount("/uploads", app=ImmutableStaticFiles(directory=UPLOAD_DIR)),
+        Mount("/uploads", app=StaticFiles(directory=UPLOAD_DIR)),
         Mount("/", app=_frontend_fallback),
     ]
 

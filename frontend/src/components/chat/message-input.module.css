@@ -14,20 +14,6 @@
   border: 1px solid var(--mc-border);
 }
 
-.previewLabel {
-  display: inline-block;
-  padding: 4px 8px;
-  font-size: 0.78rem;
-  color: var(--mc-text);
-  background: var(--mc-bg-input);
-  border: 1px solid var(--mc-border);
-  border-radius: var(--mc-radius);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .previewRemove {
   position: absolute;
   top: 3px;

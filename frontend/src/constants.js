@@ -13,7 +13,7 @@ export const TIMESTAMP_TODAY_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 export const USER_STORAGE_KEY = 'microcord_user';
 export const TOKEN_STORAGE_KEY = 'microcord_token';
 
-export const APP_VERSION = '0.3.1';
+export const APP_VERSION = '0.3.0';
 export const APP_TAGLINE = 'Microcord \u2014 a mini self-hostable chat app';
 
 export const CHAT_PAGE_SIZE = 30;
@@ -32,13 +32,4 @@ export const SCREENSHARE_CONSTRAINTS = {
     frameRate: { ideal: UI_CONFIG.screenshare?.frameRate ?? 30 },
   },
   audio: true,
-};
-
-export const MEDIA_TRANSCODE = UI_CONFIG.mediaTranscode ?? {
-  enabled: false,
-  maxImageInputBytes: 14 * 1024 * 1024,
-  maxVideoInputBytes: 70 * 1024 * 1024,
-  maxOutputBytes: 50 * 1024 * 1024,
-  avifQuality: 60,
-  h264Bitrate: 2_000_000,
 };
