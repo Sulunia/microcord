@@ -1,4 +1,5 @@
 import logging
+import random
 import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -8,12 +9,13 @@ from typing import Protocol
 import bcrypt
 import jwt
 from starlette.responses import JSONResponse
-from sqlalchemy import select
 
 from constants import (
     AUTH_PROVIDER, JWT_SECRET, JWT_ALGORITHM, JWT_ISSUER, JWT_AUDIENCE,
     JWT_EXPIRY_HOURS, JWT_SECRET_MIN_LENGTH, JWT_SECRET_FILE,
 )
+from database.models import TICK_SOUNDS
+from database.repository import repo
 from services.guard import guard
 
 logger = logging.getLogger(__name__)
@@ -22,14 +24,11 @@ _jwt_secret: str | None = None
 
 AUTH_EXEMPT_PREFIXES = (
     "/api/auth/",
-    # "/api/ui",
-    # "/api/openapi",
     "/uploads/",
 )
 
 
 def _resolve_secret() -> str:
-    """Resolve JWT secret: env var > file > auto-generate."""
     global _jwt_secret
     if _jwt_secret:
         return _jwt_secret
@@ -79,7 +78,6 @@ def create_token(user_id: str, user_name: str) -> str:
 
 
 def decode_token(token: str) -> dict | None:
-    """Decode and validate a JWT. Returns payload dict or None on failure."""
     secret = _resolve_secret()
     try:
         return jwt.decode(
@@ -104,49 +102,21 @@ class AuthProvider(Protocol):
 
 
 class LocalProvider:
-    """Authenticates against bcrypt password_hash stored in User model."""
-
     async def authenticate(self, name: str, password: str):
-        from models.user import User
-        from models.base import get_read_session
-
-        factory = get_read_session()
-        async with factory() as session:
-            result = await session.execute(select(User).where(User.name == name))
-            user = result.scalar_one_or_none()
-            if not user or not user.password_hash:
-                return None
-            if not verify_password(password, user.password_hash):
-                return None
-            return user
+        user = await repo.get_user_by_name(name)
+        if not user or not user.password_hash:
+            return None
+        if not verify_password(password, user.password_hash):
+            return None
+        return user
 
     async def register(self, name: str, password: str):
-        import random
-        from models.user import User, TICK_SOUNDS
-        from services.db_writer import enqueue_write
-
         pw_hash = hash_password(password)
         tick = random.choice(TICK_SOUNDS)
-
-        async def _write(session):
-            existing = await session.execute(select(User).where(User.name == name))
-            if existing.scalar_one_or_none():
-                return None
-            user = User(name=name, password_hash=pw_hash, tick_sound=tick)
-            session.add(user)
-            await session.flush()
-            await session.refresh(user)
-            return user
-
-        return await enqueue_write(_write)
+        return await repo.create_user(name, pw_hash, tick)
 
 
 def _build_provider() -> AuthProvider:
-    """Instantiate the auth provider based on AUTH_PROVIDER env var.
-
-    Currently only "local" (username/password with bcrypt) is implemented.
-    Future providers (e.g. "oidc" for PocketID/LLDAP) can be added here.
-    """
     if AUTH_PROVIDER == "local":
         return LocalProvider()
     raise ValueError(f"Unknown AUTH_PROVIDER: {AUTH_PROVIDER!r} (supported: local)")
@@ -156,8 +126,6 @@ auth_provider = _build_provider()
 
 
 class AuthMiddleware:
-    """Pure ASGI middleware — enforces JWT auth on all HTTP requests."""
-
     def __init__(self, app):
         self.app = app
 

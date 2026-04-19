@@ -2,15 +2,18 @@ import base64
 import logging
 import os
 from datetime import datetime, timezone
+
 from connexion.lifecycle import ConnexionResponse
 from connexion import request as connexion_request
-from sqlalchemy import select, or_, and_
-from models.message import Message
-from models.base import get_read_session
-from services.db_writer import enqueue_write
-from ws.manager import ws_manager
-from constants import DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT, MAX_MESSAGE_CONTENT_LENGTH, IMAGE_URL_PREFIX, UPLOAD_DIR
+
+from constants import (
+    DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT, MAX_MESSAGE_CONTENT_LENGTH,
+    IMAGE_URL_PREFIX, UPLOAD_DIR,
+)
+from database.repository import repo
+from services.media_manager import media_manager
 from services.guard import guard
+from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -33,46 +36,32 @@ def _get_current_user_id() -> str | None:
         scope = connexion_request.scope
         return scope.get("state", {}).get("current_user", {}).get("id")
     except Exception:
+        logger.exception("Failed to get current user ID")
         return None
 
 
 async def list_messages(limit: int = DEFAULT_MESSAGE_LIMIT, cursor: str | None = None) -> dict:
     limit = min(limit, MAX_MESSAGE_LIMIT)
-    factory = get_read_session()
-    async with factory() as session:
-        query = (
-            select(Message)
-            .order_by(Message.created_at.desc(), Message.id.desc())
-        )
 
-        if cursor:
-            try:
-                cursor_ts, cursor_id = _decode_cursor(cursor)
-            except Exception:
-                return {"messages": [], "next_cursor": None}
-            query = query.where(
-                or_(
-                    Message.created_at < cursor_ts,
-                    and_(Message.created_at == cursor_ts, Message.id < cursor_id),
-                )
-            )
+    cursor_ts = None
+    cursor_id = None
+    if cursor:
+        try:
+            cursor_ts, cursor_id = _decode_cursor(cursor)
+        except Exception:
+            logger.exception(f"Invalid cursor: {cursor}")
+            return {"messages": [], "next_cursor": None}
 
-        query = query.limit(limit + 1)
-        result = await session.execute(query)
-        rows = result.scalars().all()
+    rows, has_next = await repo.list_messages(limit, cursor_ts=cursor_ts, cursor_id=cursor_id)
 
-        has_next = len(rows) > limit
-        if has_next:
-            rows = rows[:limit]
+    messages = [m.to_dict() for m in reversed(rows)]
 
-        messages = [m.to_dict() for m in reversed(rows)]
+    next_cursor = None
+    if has_next and rows:
+        oldest = rows[-1]
+        next_cursor = _encode_cursor(oldest.created_at, oldest.id)
 
-        next_cursor = None
-        if has_next and rows:
-            oldest = rows[-1]
-            next_cursor = _encode_cursor(oldest.created_at, oldest.id)
-
-        return {"messages": messages, "next_cursor": next_cursor}
+    return {"messages": messages, "next_cursor": next_cursor}
 
 
 async def send_message(body: dict) -> ConnexionResponse:
@@ -99,20 +88,13 @@ async def send_message(body: dict) -> ConnexionResponse:
     if len(content) > MAX_MESSAGE_CONTENT_LENGTH:
         return ConnexionResponse(status_code=400, body={"error": f"Message too long (max {MAX_MESSAGE_CONTENT_LENGTH} characters)"})
 
-    async def _write(session):
-        msg = Message(author_id=author_id, content=content, image_url=image_url)
-        session.add(msg)
-        await session.flush()
-        await session.refresh(msg, attribute_names=["author"])
-        return msg.to_dict(include_author=True)
-
-    result = await enqueue_write(_write)
+    msg = await repo.create_message(author_id, content, image_url)
+    result = msg.to_dict(include_author=True)
     logger.info(f"Message sent by {author_id}: {result['id']}")
 
     has_media = bool(result.get("image_url"))
 
     if has_media:
-        from services.media_manager import media_manager
         filepath = os.path.join(UPLOAD_DIR, os.path.basename(result["image_url"]))
         if os.path.exists(filepath):
             await media_manager.enqueue(filepath, result["id"], author_id)

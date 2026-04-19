@@ -31,6 +31,7 @@ class ConnectionManager:
             try:
                 await ws.send_text(payload)
             except Exception:
+                logger.exception(f"Failed to send to {uid}, disconnecting")
                 self.disconnect(uid)
 
     @property

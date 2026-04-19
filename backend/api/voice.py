@@ -1,9 +1,7 @@
 import logging
 from connexion.lifecycle import ConnexionResponse
 from connexion import request as connexion_request
-from sqlalchemy import select
-from models.user import User
-from models.base import get_read_session
+from database.repository import repo
 from services.voice_room import voice_room
 from ws.manager import ws_manager
 from constants import ICE_SERVERS
@@ -16,18 +14,15 @@ def _get_current_user() -> dict | None:
         scope = connexion_request.scope
         return scope.get("state", {}).get("current_user")
     except Exception:
+        logger.exception("Failed to get current user")
         return None
 
 
 async def _resolve_participants() -> list[dict]:
-    """Build participant list with fresh display names from DB."""
     ids = voice_room.user_ids
     if not ids:
         return []
-    factory = get_read_session()
-    async with factory() as session:
-        result = await session.execute(select(User).where(User.id.in_(ids)))
-        users = {u.id: u for u in result.scalars().all()}
+    users = await repo.get_users_by_ids(ids)
     return [
         {
             "user_id": uid,
@@ -45,11 +40,9 @@ async def join_voice(body: dict) -> ConnexionResponse:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
     user_id = jwt_user["id"]
 
-    factory = get_read_session()
-    async with factory() as session:
-        result = await session.execute(select(User).where(User.id == user_id))
-        if not result.scalar_one_or_none():
-            return ConnexionResponse(status_code=400, body={"error": "Unknown user"})
+    user = await repo.get_user_by_id(user_id)
+    if not user:
+        return ConnexionResponse(status_code=400, body={"error": "Unknown user"})
 
     voice_room.join(user_id)
 

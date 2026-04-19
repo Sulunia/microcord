@@ -1,11 +1,10 @@
 import logging
 
-from sqlalchemy import select
 from connexion.lifecycle import ConnexionResponse
 from connexion import request as connexion_request
-from constants import AUTH_PROVIDER
-from models.user import User
-from models.base import get_read_session
+
+from constants import AUTH_PROVIDER, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH
+from database.repository import repo
 from services.auth import auth_provider, create_token, decode_token
 from services.guard import guard, get_client_ip
 from services.ws_ticket import create_ticket
@@ -17,6 +16,7 @@ def _get_ip() -> str:
     try:
         return get_client_ip(connexion_request.scope)
     except Exception:
+        logger.exception("Failed to resolve client IP")
         return "unknown"
 
 
@@ -41,10 +41,10 @@ async def register(body: dict) -> ConnexionResponse:
 
     if not name or not password:
         return ConnexionResponse(status_code=400, body={"error": "Name and password required"})
-    if len(password) < 6:
-        return ConnexionResponse(status_code=400, body={"error": "Password must be at least 6 characters"})
-    if len(password) > 128:
-        return ConnexionResponse(status_code=400, body={"error": "Password too long (max 128 characters)"})
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return ConnexionResponse(status_code=400, body={"error": f"Password must be at least {PASSWORD_MIN_LENGTH} characters"})
+    if len(password) > PASSWORD_MAX_LENGTH:
+        return ConnexionResponse(status_code=400, body={"error": f"Password too long (max {PASSWORD_MAX_LENGTH} characters)"})
     if not guard.verify_passphrase(passphrase):
         return ConnexionResponse(status_code=403, body={"error": "Invalid server passphrase"})
 
@@ -92,13 +92,10 @@ async def me(**kwargs) -> ConnexionResponse:
     if not user_id:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
 
-    factory = get_read_session()
-    async with factory() as session:
-        result = await session.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            return ConnexionResponse(status_code=404, body={"error": "User not found"})
-        return user.to_dict()
+    user = await repo.get_user_by_id(user_id)
+    if not user:
+        return ConnexionResponse(status_code=404, body={"error": "User not found"})
+    return user.to_dict()
 
 
 async def status() -> dict:

@@ -2,11 +2,13 @@ import asyncio
 import logging
 import os
 import subprocess
-from sqlalchemy import select
-from constants import MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE, MEDIA_VIDEO_MAX_BITRATE, MEDIA_FFMPEG_THREADS, UPLOAD_DIR
-from models.message import Message
-from models.user import User
-from services.db_writer import enqueue_write
+
+from constants import (
+    MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE,
+    MEDIA_VIDEO_MAX_BITRATE, MEDIA_FFMPEG_THREADS,
+    FFMPEG_TIMEOUT_SECONDS,
+)
+from database.repository import repo
 from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -93,19 +95,9 @@ class MediaManager:
         else:
             new_url = f"/uploads/{os.path.basename(original_path)}"
 
-        async def _update(session):
-            result = await session.execute(select(Message).where(Message.id == message_id))
-            msg = result.scalar_one_or_none()
-            if not msg:
-                return None
-            msg.image_url = new_url
-            await session.flush()
-            await session.refresh(msg, attribute_names=["author"])
-            return msg.to_dict(include_author=True)
-
-        result = await enqueue_write(_update)
-        if result:
-            await ws_manager.broadcast({"type": "chat_message", "data": result})
+        msg = await repo.update_message_image(message_id, new_url)
+        if msg:
+            await ws_manager.broadcast({"type": "chat_message", "data": msg.to_dict(include_author=True)})
         else:
             logger.warning(f"Message {message_id} not found for media update")
 
@@ -135,21 +127,11 @@ class MediaManager:
         else:
             new_url = f"/uploads/avatars/{os.path.basename(original_path)}"
 
-        async def _update(session):
-            result = await session.execute(select(User).where(User.id == user_id))
-            user = result.scalar_one_or_none()
-            if not user:
-                return None
-            user.avatar_url = new_url
-            await session.flush()
-            await session.refresh(user)
-            return user.to_dict()
-
-        result = await enqueue_write(_update)
-        if result:
+        user = await repo.update_user_avatar(user_id, new_url)
+        if user:
             await ws_manager.broadcast({
                 "type": "user_updated",
-                "data": {"user_id": user_id, "user": result},
+                "data": {"user_id": user_id, "user": user.to_dict()},
             })
         else:
             logger.warning(f"User {user_id} not found for avatar update")
@@ -222,7 +204,7 @@ class MediaManager:
         try:
             proc = await loop.run_in_executor(
                 None,
-                lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=300),
+                lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT_SECONDS),
             )
             if proc.returncode == 0 and os.path.exists(output_path):
                 return output_path

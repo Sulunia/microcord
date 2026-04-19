@@ -52,12 +52,6 @@ class Guard:
             return False
         return True
 
-    @staticmethod
-    def is_token_revoked(token: str) -> bool:
-        import warnings
-        warnings.warn("Use is_jti_revoked instead", DeprecationWarning, stacklevel=2)
-        return False
-
     # --- Rate limiting with exponential backoff ---
 
     def check(self, key: str, max_hits: int, window: float, max_backoff: float) -> float | None:
