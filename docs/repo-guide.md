@@ -11,7 +11,8 @@ Version **0.3.0**.
 ┌─────────────┐         ┌──────────────────────────┐
 │   Browser    │◄──WS───►│  Starlette (ASGI shell)   │
 │  (Preact)    │◄─REST──►│  ├─ Connexion (OpenAPI)   │
-│              │         │  ├─ AuthMiddleware (JWT)  │
+│              │         │  ├─ SecurityHeadersMiddleware │
+│  ├─ AuthMiddleware (JWT)  │
 │  Voice:      │◄─P2P──►│  ├─ WS voice signaling     │
 │  WebRTC mesh │         │  ├─ WS screenshare signal  │
 │              │         │  ├─ WebSocket manager      │
@@ -60,6 +61,7 @@ microcord/
 │   │   └── message.py          # Message model
 │   ├── services/
 │   │   ├── auth.py             # JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
+│   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
 │   │   ├── db_writer.py        # Single-writer asyncio queue for SQLite safety
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
 │   │   ├── voice_room.py       # In-memory voice participants, single-sharer tracking
@@ -166,6 +168,14 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `CORS_ORIGIN` | `http://localhost:5173` | Backend | Allowed CORS origin |
 | `REGISTRATION_PASSPHRASE` | *(auto-generated)* | Backend | 6-digit hex uppercase passphrase required for registration; auto-generated and logged on startup if not set |
 | `ICE_SERVERS` | `[{"urls":"stun:stun.l.google.com:19302"}]` | Backend | JSON array of ICE server objects for WebRTC (STUN/TURN) |
+| `TRUST_PROXY` | `false` | Backend | Trust `X-Forwarded-For` / `X-Real-IP` headers for rate limiting. Enable when behind a reverse proxy |
+| `INSECURE_HTTP` | `false` | Backend | Skip HSTS header. Enable for local/dev HTTP; in production, use a TLS-terminating reverse proxy instead |
+| `MAX_UPLOAD_SIZE_MB` | `50` | Backend | Maximum upload size in megabytes |
+| `MEDIA_AVIF_CRF` | `30` | Backend | AVIF encoding quality (lower = better) |
+| `MEDIA_AV1_CRF` | `35` | Backend | AV1 video encoding quality |
+| `MEDIA_VIDEO_SCALE` | `1.0` | Backend | Video downscale factor (e.g. `0.5` for half resolution) |
+| `MEDIA_VIDEO_MAX_BITRATE` | *(empty)* | Backend | Max video bitrate (e.g. `0.7M`) |
+| `MEDIA_FFMPEG_THREADS` | `2` | Backend | FFmpeg encoding thread count |
 | `CHOKIDAR_USEPOLLING` | `true` | Frontend (Docker) | Enable file-system polling for Vite HMR in containers |
 
 ---
@@ -320,9 +330,12 @@ Configure via environment variables or a `.env` file alongside `docker-compose.p
 JWT_SECRET=your-secret-at-least-32-chars-long
 CORS_ORIGIN=https://chat.yourdomain.com
 ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19302"}]
+TRUST_PROXY=true
 ```
 
 In production, frontend and backend share the same origin, so `CORS_ORIGIN` should match the public URL. CORS middleware is a no-op for same-origin requests.
+
+**TLS is required for production.** Place a reverse proxy (nginx, Caddy, Traefik) in front with TLS termination. The backend adds security headers including HSTS by default. If you must run without TLS (local testing only), set `INSECURE_HTTP=true` to suppress the HSTS header.
 
 ### Persistent volumes
 
@@ -355,6 +368,8 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Image URL validation | Only `/uploads/`-prefixed URLs accepted in messages and avatars |
 | Password storage | bcrypt hashing via `bcrypt >=4.0` |
 | Single-writer DB | All mutations through asyncio queue — prevents SQLite concurrent-write corruption |
+| Security headers | `SecurityHeadersMiddleware` adds `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Content-Security-Policy`, and `Strict-Transport-Security` (HSTS, 2-year max-age). HSTS is omitted when `INSECURE_HTTP=true` |
+| Proxy-aware rate limiting | When `TRUST_PROXY=true`, rate limiting reads `X-Forwarded-For` / `X-Real-IP` for client IP extraction |
 | Non-root Docker | Both Dockerfiles create and use `appuser` for the process |
 | JWT secret permissions | `.jwt_secret` file written with `0o600` permissions |
 | Message length limit | `maxLength: 4000` enforced in OpenAPI spec for message content |

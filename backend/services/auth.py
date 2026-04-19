@@ -1,5 +1,6 @@
 import logging
 import secrets
+import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Protocol
@@ -68,6 +69,7 @@ def create_token(user_id: str, user_name: str) -> str:
     payload = {
         "sub": user_id,
         "name": user_name,
+        "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": now + timedelta(hours=JWT_EXPIRY_HOURS),
         "iss": JWT_ISSUER,
@@ -86,7 +88,7 @@ def decode_token(token: str) -> dict | None:
             algorithms=[JWT_ALGORITHM],
             issuer=JWT_ISSUER,
             audience=JWT_AUDIENCE,
-            options={"require": ["sub", "name", "exp", "iat", "iss", "aud"]},
+            options={"require": ["sub", "name", "jti", "exp", "iat", "iss", "aud"]},
         )
     except jwt.PyJWTError as exc:
         logger.debug(f"JWT decode failed: {exc}")
@@ -178,15 +180,16 @@ class AuthMiddleware:
             return await response(scope, receive, send)
 
         token = auth_header[7:]
-        if guard.is_token_revoked(token):
-            response = JSONResponse(
-                {"error": "Token has been revoked"}, status_code=401
-            )
-            return await response(scope, receive, send)
         payload = decode_token(token)
         if not payload:
             response = JSONResponse(
                 {"error": "Invalid or expired token"}, status_code=401
+            )
+            return await response(scope, receive, send)
+
+        if guard.is_jti_revoked(payload["jti"]):
+            response = JSONResponse(
+                {"error": "Token has been revoked"}, status_code=401
             )
             return await response(scope, receive, send)
 

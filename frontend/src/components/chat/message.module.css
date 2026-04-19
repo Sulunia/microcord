@@ -100,6 +100,26 @@
   opacity: 0.85;
 }
 
+.mediaWrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.pending {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.pendingOverlay {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  max-width: 200px;
+  pointer-events: none;
+}
+
 .lightbox {
   position: fixed;
   inset: 0;

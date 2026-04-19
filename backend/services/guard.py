@@ -3,10 +3,23 @@ import os
 import secrets
 import time
 
+from constants import TRUST_PROXY
+
 logger = logging.getLogger(__name__)
 
 
 def get_client_ip(scope: dict) -> str:
+    if TRUST_PROXY:
+        headers = {
+            k.decode().lower(): v.decode()
+            for k, v in scope.get("headers", [])
+        }
+        xff = headers.get("x-forwarded-for", "")
+        if xff:
+            return xff.split(",")[0].strip()
+        xri = headers.get("x-real-ip", "")
+        if xri:
+            return xri.strip()
     client = scope.get("client")
     return client[0] if client else "unknown"
 
@@ -25,19 +38,25 @@ class Guard:
     def log_passphrase(self) -> None:
         logger.info(f"Registration passphrase: {self.passphrase}")
 
-    # --- Token revocation (carries over from H2) ---
+    # --- Token revocation (by JTI) ---
 
-    def revoke_token(self, token: str, expires_at: float) -> None:
-        self._revoked[token] = expires_at
+    def revoke_jti(self, jti: str, expires_at: float) -> None:
+        self._revoked[jti] = expires_at
 
-    def is_token_revoked(self, token: str) -> bool:
-        exp = self._revoked.get(token)
+    def is_jti_revoked(self, jti: str) -> bool:
+        exp = self._revoked.get(jti)
         if exp is None:
             return False
         if exp < time.time():
-            del self._revoked[token]
+            del self._revoked[jti]
             return False
         return True
+
+    @staticmethod
+    def is_token_revoked(token: str) -> bool:
+        import warnings
+        warnings.warn("Use is_jti_revoked instead", DeprecationWarning, stacklevel=2)
+        return False
 
     # --- Rate limiting with exponential backoff ---
 

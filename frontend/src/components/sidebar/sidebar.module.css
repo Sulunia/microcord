@@ -316,6 +316,13 @@
   text-align: center;
 }
 
+.avatarProgress {
+  position: absolute;
+  bottom: 4px;
+  left: 10%;
+  width: 80%;
+}
+
 .profileDeviceGroup {
   display: flex;
   flex-direction: column;

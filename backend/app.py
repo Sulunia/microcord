@@ -11,6 +11,7 @@ from starlette.routing import WebSocketRoute, Mount
 from constants import UPLOAD_DIR, CORS_ORIGIN, AUTH_PROVIDER
 from services.auth import AuthMiddleware
 from services.guard import guard
+from services.security_headers import SecurityHeadersMiddleware
 from ws.handler import websocket_endpoint
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -30,8 +31,10 @@ FRONTEND_DIR = Path("static/frontend")
 async def lifespan(_app):
     from models.base import init_db
     from services.db_writer import start_writer
+    from services.media_manager import media_manager
     await init_db()
     start_writer()
+    media_manager.start()
     guard.log_passphrase()
     logger = logging.getLogger(__name__)
     mode = "production" if FRONTEND_DIR.is_dir() else "development"
@@ -64,6 +67,7 @@ if FRONTEND_DIR.is_dir():
 app = Starlette(
     routes=routes,
     middleware=[
+        Middleware(SecurityHeadersMiddleware),
         Middleware(AuthMiddleware),
         Middleware(
             CORSMiddleware,

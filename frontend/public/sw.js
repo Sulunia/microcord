@@ -41,10 +41,14 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(staleWhileRevalidate(request));
 });
 
+function isCacheable(response) {
+  return response.ok && response.status !== 206;
+}
+
 async function networkFirst(request) {
   try {
     const response = await fetch(request, { signal: AbortSignal.timeout(NAVIGATION_TIMEOUT) });
-    if (response.ok) {
+    if (isCacheable(response)) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
@@ -59,7 +63,7 @@ async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
   const response = await fetch(request);
-  if (response.ok) {
+  if (isCacheable(response)) {
     const cache = await caches.open(CACHE_NAME);
     cache.put(request, response.clone());
   }
@@ -70,7 +74,7 @@ async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
   const fetchPromise = fetch(request).then((response) => {
-    if (response.ok) cache.put(request, response.clone());
+    if (isCacheable(response)) cache.put(request, response.clone());
     return response;
   });
   return cached || fetchPromise;
