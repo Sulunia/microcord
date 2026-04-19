@@ -14,5 +14,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-}
       - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-24}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8000}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+      - INSECURE_HTTP=${INSECURE_HTTP:-false}
       - ICE_SERVERS=${ICE_SERVERS:-}
     restart: unless-stopped

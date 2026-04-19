@@ -44,7 +44,7 @@ Set via environment variables or a `.env` file:
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Single container on port 8000 — serves the built frontend and API together. Persistent data in `./data/` (SQLite DB, JWT secret) and `./uploads/` (images).
+Single container on port 8000 — serves the built frontend and API together. Persistent data in `./data/` (SQLite DB, JWT secret) and `./uploads/` (images). Use a TLS-terminating reverse proxy (Caddy, nginx, Traefik) in production — the backend enforces HSTS by default.
 
 ## Docs
 

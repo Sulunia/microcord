@@ -1,5 +1,6 @@
 import base64
 import logging
+import os
 from datetime import datetime, timezone
 from connexion.lifecycle import ConnexionResponse
 from connexion import request as connexion_request
@@ -8,7 +9,7 @@ from models.message import Message
 from models.base import get_read_session
 from services.db_writer import enqueue_write
 from ws.manager import ws_manager
-from constants import DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT, MAX_MESSAGE_CONTENT_LENGTH, IMAGE_URL_PREFIX
+from constants import DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT, MAX_MESSAGE_CONTENT_LENGTH, IMAGE_URL_PREFIX, UPLOAD_DIR
 from services.guard import guard
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,14 @@ async def send_message(body: dict) -> ConnexionResponse:
     result = await enqueue_write(_write)
     logger.info(f"Message sent by {author_id}: {result['id']}")
 
-    await ws_manager.broadcast({"type": "chat_message", "data": result})
+    has_media = bool(result.get("image_url"))
+
+    if has_media:
+        from services.media_manager import media_manager
+        filepath = os.path.join(UPLOAD_DIR, os.path.basename(result["image_url"]))
+        if os.path.exists(filepath):
+            await media_manager.enqueue(filepath, result["id"], author_id)
+    else:
+        await ws_manager.broadcast({"type": "chat_message", "data": result})
 
     return ConnexionResponse(status_code=201, body=result)

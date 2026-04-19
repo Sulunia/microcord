@@ -109,6 +109,9 @@ async def ws_ticket(**kwargs) -> ConnexionResponse:
     token_info = kwargs.get("token_info")
     if token_info and token_info.get("sub"):
         user_id = token_info["sub"]
+        jti = token_info.get("jti")
+        if jti and guard.is_jti_revoked(jti):
+            return ConnexionResponse(status_code=401, body={"error": "Token has been revoked"})
     else:
         scope = connexion_request.scope if hasattr(connexion_request, 'scope') else {}
         headers = dict(scope.get("headers", []))
@@ -118,6 +121,8 @@ async def ws_ticket(**kwargs) -> ConnexionResponse:
         payload = decode_token(auth_header[7:])
         if not payload:
             return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
+        if guard.is_jti_revoked(payload["jti"]):
+            return ConnexionResponse(status_code=401, body={"error": "Token has been revoked"})
         user_id = payload["sub"]
     ticket = create_ticket(user_id)
     return ConnexionResponse(status_code=200, body={"ticket": ticket})
@@ -131,7 +136,8 @@ async def logout(**kwargs) -> ConnexionResponse:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
     token = auth_header[7:]
     payload = decode_token(token)
-    if payload and "exp" in payload:
-        guard.revoke_token(token, payload["exp"])
-    logger.info("Auth logout: token revoked")
+    if not payload:
+        return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
+    guard.revoke_jti(payload["jti"], payload["exp"])
+    logger.info("Auth logout: token revoked (jti=%s)", payload["jti"])
     return ConnexionResponse(status_code=200, body={"message": "Logged out"})

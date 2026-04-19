@@ -28,7 +28,7 @@ export function MessageInput({ onSend }) {
         const file = item.getAsFile();
         if (!file) return;
         if (file.size > MAX_IMAGE_BYTES) {
-          setAlertMsg('Image attachment is too big to be sent (max 50 MB).');
+          setAlertMsg('Attachment is too big to be sent (max 50 MB).');
           return;
         }
         setImageFile(file);
@@ -55,7 +55,7 @@ export function MessageInput({ onSend }) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_IMAGE_BYTES) {
-      setAlertMsg('Image attachment is too big to be sent (max 50 MB).');
+      setAlertMsg('Attachment is too big to be sent (max 50 MB).');
       return;
     }
     setImageFile(file);
@@ -82,13 +82,13 @@ export function MessageInput({ onSend }) {
         <button
           class={styles.attachBtn}
           onClick={() => fileRef.current?.click()}
-          title="Attach image"
+          title="Attach media"
         >
           📎
         </button>
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,video/mp4,video/webm,video/quicktime"
           ref={fileRef}
           class={styles.fileInput}
           onChange={handleFileChange}

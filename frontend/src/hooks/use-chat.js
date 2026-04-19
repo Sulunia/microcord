@@ -94,7 +94,15 @@ export function useChat(user) {
             if (author?.id) {
               setUsersMap((prev) => ({ ...prev, [author.id]: author }));
             }
-            setMessages((prev) => [...prev, msg.data]);
+            setMessages((prev) => {
+              const existing = prev.findIndex((m) => m.id === msg.data?.id);
+              if (existing >= 0) {
+                const updated = [...prev];
+                updated[existing] = msg.data;
+                return updated;
+              }
+              return [...prev, msg.data];
+            });
             const authorId = author?.id;
             const currentId = userRef.current?.id;
             if (authorId && authorId !== currentId) {
@@ -153,11 +161,18 @@ export function useChat(user) {
 
     if (!text.trim() && !image_url) return;
 
-    await fetch(`${API_BASE}/messages`, {
+    const res = await fetch(`${API_BASE}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ content: text, image_url }),
     });
+
+    if (res.ok) {
+      const msgData = await res.json();
+      if (image_url) {
+        setMessages((prev) => [...prev, { ...msgData, pending: true }]);
+      }
+    }
 
     playTick(userRef.current?.tick_sound);
   }, []);

@@ -3,8 +3,13 @@ import os
 
 DB_URL = "sqlite+aiosqlite:///data/microcord.db"
 UPLOAD_DIR = "uploads"
-MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024
+MAX_UPLOAD_SIZE_BYTES = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "50")) * 1024 * 1024
 MAX_AVATAR_SIZE_BYTES = 1 * 1024 * 1024
+MEDIA_AVIF_CRF = int(os.environ.get("MEDIA_AVIF_CRF", "30"))
+MEDIA_AV1_CRF = int(os.environ.get("MEDIA_AV1_CRF", "35"))
+MEDIA_VIDEO_SCALE = float(os.environ.get("MEDIA_VIDEO_SCALE", "1.0"))
+MEDIA_VIDEO_MAX_BITRATE = os.environ.get("MEDIA_VIDEO_MAX_BITRATE", "")
+MEDIA_FFMPEG_THREADS = int(os.environ.get("MEDIA_FFMPEG_THREADS", "2"))
 DEFAULT_MESSAGE_LIMIT = 50
 MAX_MESSAGE_LIMIT = 200
 MAX_MESSAGE_CONTENT_LENGTH = 4000
@@ -19,6 +24,9 @@ JWT_SECRET_MIN_LENGTH = 32
 JWT_SECRET_FILE = "data/.jwt_secret"
 
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "http://localhost:5173")
+
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
+INSECURE_HTTP = os.environ.get("INSECURE_HTTP", "").lower() in ("1", "true", "yes")
 
 IMAGE_URL_PREFIX = "/uploads/"
 

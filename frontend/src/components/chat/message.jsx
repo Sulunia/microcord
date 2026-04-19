@@ -35,7 +35,7 @@ function Lightbox({ src, onClose }) {
 }
 
 function MessageInner({ message, grouped, animate }) {
-  const { author, content, image_url, image, created_at, timestamp } = message;
+  const { author, content, image_url, image, created_at, timestamp, pending } = message;
   const name = author?.display_name ?? author?.name ?? 'Unknown';
   const initial = name.charAt(0).toUpperCase();
   const html = useMemo(
@@ -46,21 +46,39 @@ function MessageInner({ message, grouped, animate }) {
 
   const ts = created_at ? new Date(created_at).getTime() : (timestamp || Date.now());
   const imgSrc = image_url || image;
+  const isVideo = imgSrc && /\.(mp4|webm|mov)(\?|$)/i.test(imgSrc);
+
+  const mediaEl = imgSrc && (
+    <div class={styles.mediaWrapper}>
+      {isVideo ? (
+        <video
+          class={`${styles.image}${pending ? ` ${styles.pending}` : ''}`}
+          src={imgSrc}
+          controls={!pending}
+          loop
+          muted
+          playsinline
+          preload="metadata"
+        />
+      ) : (
+        <img
+          class={`${styles.image}${pending ? ` ${styles.pending}` : ''}`}
+          src={imgSrc}
+          alt="attachment"
+          loading="lazy"
+          decoding="async"
+          onClick={() => !pending && setPreview(true)}
+        />
+      )}
+      {pending && <progress class={styles.pendingOverlay} />}
+    </div>
+  );
 
   if (grouped) {
     return (
       <div class={styles.grouped}>
         {content && <div class={styles.content} dangerouslySetInnerHTML={{ __html: html }} />}
-        {imgSrc && (
-          <img
-            class={styles.image}
-            src={imgSrc}
-            alt="attachment"
-            loading="lazy"
-            decoding="async"
-            onClick={() => setPreview(true)}
-          />
-        )}
+        {mediaEl}
         {preview && createPortal(<Lightbox src={imgSrc} onClose={() => setPreview(false)} />, document.body)}
       </div>
     );
@@ -79,16 +97,7 @@ function MessageInner({ message, grouped, animate }) {
           <span class={styles.timestamp} title={new Date(ts).toLocaleString()}>{formatTimestamp(ts)}</span>
         </div>
         {content && <div class={styles.content} dangerouslySetInnerHTML={{ __html: html }} />}
-        {imgSrc && (
-          <img
-            class={styles.image}
-            src={imgSrc}
-            alt="attachment"
-            loading="lazy"
-            decoding="async"
-            onClick={() => setPreview(true)}
-          />
-        )}
+        {mediaEl}
       </div>
       {preview && createPortal(<Lightbox src={imgSrc} onClose={() => setPreview(false)} />, document.body)}
     </div>

@@ -10,6 +10,7 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
   const [displayName, setDisplayName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [avatarConverting, setAvatarConverting] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarError, setAvatarError] = useState(null);
@@ -27,6 +28,7 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
     setAvatarPreview(null);
     setAvatarFile(null);
     setAvatarError(null);
+    setAvatarConverting(false);
     setSelectedTick(user?.tick_sound ?? 1);
     navigator.mediaDevices.enumerateDevices().then((devices) => {
       setAudioDevices({
@@ -64,6 +66,7 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
     }
     setAvatarFile(null);
     setAvatarPreview(null);
+    setAvatarConverting(true);
   };
 
   const save = async (e) => {
@@ -109,15 +112,16 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
             </p>
             <div
               class={styles.profileAvatarPreview}
-              onClick={() => fileRef.current?.click()}
-              title="Click to change avatar"
+              onClick={() => !avatarConverting && fileRef.current?.click()}
+              title={avatarConverting ? 'Converting…' : 'Click to change avatar'}
             >
               {previewSrc ? (
                 <img src={previewSrc} class={styles.profileAvatarImage} alt="Avatar preview" />
               ) : (
                 <span class={styles.profileAvatarFallback}>{initials}</span>
               )}
-              <span class={styles.profileAvatarOverlay}>Change</span>
+              {avatarConverting && <progress class={styles.avatarProgress} />}
+              {!avatarConverting && <span class={styles.profileAvatarOverlay}>Change</span>}
             </div>
             <input
               ref={fileRef}

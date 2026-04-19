@@ -22,6 +22,7 @@ function getTimestamp(msg) {
 export function ChatPanel({ chat, screenshare }) {
   const { messages, sendMessage, loadOlder, hasMore } = chat;
   const listRef = useRef(null);
+  const contentRef = useRef(null);
   const prevCountRef = useRef(0);
   const wasAtBottomRef = useRef(true);
   const panelRef = useRef(null);
@@ -95,6 +96,19 @@ export function ChatPanel({ chat, screenshare }) {
     });
   }, [messages.length, hasMore, loadOlder]);
 
+  useEffect(() => {
+    const el = listRef.current;
+    const content = contentRef.current;
+    if (!el || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (wasAtBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
   const onScroll = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
@@ -147,7 +161,9 @@ export function ChatPanel({ chat, screenshare }) {
       )}
       <div class={styles.chatSection} style={hasScreenshare ? { height: `${(1 - videoRatio) * 100}%` } : undefined}>
         <div class={styles.messageList} ref={listRef} onScroll={onScroll}>
-          {renderedMessages}
+          <div ref={contentRef} class={styles.messageContent}>
+            {renderedMessages}
+          </div>
         </div>
         <MessageInput onSend={sendMessage} />
       </div>
