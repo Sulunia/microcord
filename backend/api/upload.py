@@ -1,15 +1,15 @@
+import asyncio
+import logging
 import os
 import uuid
-import logging
-import asyncio
+
 from connexion.lifecycle import ConnexionResponse
 from connexion import request as connexion_request
-from sqlalchemy import select
-from constants import UPLOAD_DIR, MAX_UPLOAD_SIZE_BYTES, MAX_AVATAR_SIZE_BYTES
-from models.user import User
-from models.base import get_read_session
-from services.db_writer import enqueue_write
+
+from constants import UPLOAD_DIR, MAX_UPLOAD_SIZE_BYTES, MAX_AVATAR_SIZE_BYTES, UPLOAD_CHUNK_SIZE
+from database.repository import repo
 from services.guard import guard
+from services.media_manager import media_manager
 from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,7 @@ def _get_current_user_id() -> str | None:
         scope = connexion_request.scope
         return scope.get("state", {}).get("current_user", {}).get("id")
     except Exception:
+        logger.exception("Failed to get current user ID")
         return None
 
 
@@ -79,7 +80,7 @@ async def _stream_file(file, max_bytes: int, dest_dir: str, dest_filename: str) 
         except ValueError:
             pass
 
-    chunk_size = 64 * 1024
+    chunk_size = UPLOAD_CHUNK_SIZE
     first_bytes = b""
     total = 0
 
@@ -105,6 +106,7 @@ async def _stream_file(file, max_bytes: int, dest_dir: str, dest_filename: str) 
         os.rename(tmp_path, dest_path)
         return first_bytes, dest_path
     except Exception:
+        logger.exception(f"Failed to stream file to {dest_path}")
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise
@@ -191,23 +193,13 @@ async def upload_avatar(file) -> ConnexionResponse:
     avatar_url = f"/uploads/avatars/{filename}"
 
     if ext != ".avif":
-        from services.media_manager import media_manager
         await media_manager.enqueue_avatar(filepath, user_id)
 
-    async def _write(session):
-        result = await session.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            return None
-        user.avatar_url = avatar_url
-        await session.flush()
-        await session.refresh(user)
-        return user.to_dict()
-
-    result = await enqueue_write(_write)
-    if result is None:
+    user = await repo.update_user_avatar(user_id, avatar_url)
+    if user is None:
         return ConnexionResponse(status_code=404, body={"error": "User not found"})
 
+    result = user.to_dict()
     await ws_manager.broadcast({
         "type": "user_updated",
         "data": {"user_id": user_id, "user": result},

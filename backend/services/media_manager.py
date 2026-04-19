@@ -2,11 +2,13 @@ import asyncio
 import logging
 import os
 import subprocess
-from sqlalchemy import select
-from constants import MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE, MEDIA_VIDEO_MAX_BITRATE, MEDIA_FFMPEG_THREADS, UPLOAD_DIR
-from models.message import Message
-from models.user import User
-from services.db_writer import enqueue_write
+
+from constants import (
+    MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE,
+    MEDIA_VIDEO_MAX_BITRATE, MEDIA_FFMPEG_THREADS,
+    FFMPEG_TIMEOUT_SECONDS,
+)
+from database.repository import repo
 from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,14 @@ def _classify_media(ext: str) -> str | None:
 
 
 class MediaManager:
+    """Background worker that converts uploaded images and videos via ffmpeg.
+
+    Accepts jobs through an async queue and processes them sequentially.
+    Images are transcoded to AVIF; videos (and GIFs) are transcoded to
+    AV1/MP4.  After conversion the DB is updated and connected WebSocket
+    clients are notified.
+    """
+
     def __init__(self):
         self._queue: asyncio.Queue | None = None
         self._task: asyncio.Task | None = None
@@ -36,6 +46,7 @@ class MediaManager:
         return self._task
 
     async def enqueue(self, original_path: str, message_id: str, author_id: str):
+        logger.debug(f"Enqueued message media job: msg={message_id} file={os.path.basename(original_path)}")
         await self._queue.put({
             "original_path": original_path,
             "message_id": message_id,
@@ -43,6 +54,7 @@ class MediaManager:
         })
 
     async def enqueue_avatar(self, original_path: str, user_id: str):
+        logger.debug(f"Enqueued avatar job: user={user_id} file={os.path.basename(original_path)}")
         await self._queue.put({
             "original_path": original_path,
             "user_id": user_id,
@@ -70,11 +82,14 @@ class MediaManager:
         ext = os.path.splitext(original_path)[1].lower()
         media_type = _classify_media(ext)
 
+        logger.debug(f"Processing message media: msg={message_id} ext={ext} type={media_type}")
+
         if media_type == "image":
             converted = await self._convert_image(original_path)
         elif media_type == "video":
             converted = await self._convert_video(original_path)
         else:
+            logger.warning(f"Unknown media type for ext={ext}, skipping conversion")
             converted = None
 
         if converted:
@@ -93,19 +108,9 @@ class MediaManager:
         else:
             new_url = f"/uploads/{os.path.basename(original_path)}"
 
-        async def _update(session):
-            result = await session.execute(select(Message).where(Message.id == message_id))
-            msg = result.scalar_one_or_none()
-            if not msg:
-                return None
-            msg.image_url = new_url
-            await session.flush()
-            await session.refresh(msg, attribute_names=["author"])
-            return msg.to_dict(include_author=True)
-
-        result = await enqueue_write(_update)
-        if result:
-            await ws_manager.broadcast({"type": "chat_message", "data": result})
+        msg = await repo.update_message_image(message_id, new_url)
+        if msg:
+            await ws_manager.broadcast({"type": "chat_message", "data": msg.to_dict(include_author=True)})
         else:
             logger.warning(f"Message {message_id} not found for media update")
 
@@ -115,8 +120,10 @@ class MediaManager:
 
         ext = os.path.splitext(original_path)[1].lower()
         if ext == ".avif":
+            logger.debug(f"Avatar already AVIF for user={user_id}, skipping conversion")
             return
 
+        logger.debug(f"Processing avatar: user={user_id} ext={ext}")
         converted = await self._convert_image(original_path)
 
         if converted:
@@ -135,21 +142,11 @@ class MediaManager:
         else:
             new_url = f"/uploads/avatars/{os.path.basename(original_path)}"
 
-        async def _update(session):
-            result = await session.execute(select(User).where(User.id == user_id))
-            user = result.scalar_one_or_none()
-            if not user:
-                return None
-            user.avatar_url = new_url
-            await session.flush()
-            await session.refresh(user)
-            return user.to_dict()
-
-        result = await enqueue_write(_update)
-        if result:
+        user = await repo.update_user_avatar(user_id, new_url)
+        if user:
             await ws_manager.broadcast({
                 "type": "user_updated",
-                "data": {"user_id": user_id, "user": result},
+                "data": {"user_id": user_id, "user": user.to_dict()},
             })
         else:
             logger.warning(f"User {user_id} not found for avatar update")
@@ -218,11 +215,12 @@ class MediaManager:
         return f"{n / (1024 * 1024):.1f} MB"
 
     async def _run_ffmpeg(self, cmd: list[str], output_path: str) -> str | None:
+        logger.debug(f"Running ffmpeg: {' '.join(cmd)}")
         loop = asyncio.get_event_loop()
         try:
             proc = await loop.run_in_executor(
                 None,
-                lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=300),
+                lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT_SECONDS),
             )
             if proc.returncode == 0 and os.path.exists(output_path):
                 return output_path

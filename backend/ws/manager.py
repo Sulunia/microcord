@@ -6,6 +6,12 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
+    """Registry of active WebSocket connections, keyed by user ID.
+
+    Provides targeted send (``send_to``) and fan-out broadcast
+    (``broadcast``) with optional sender exclusion.
+    """
+
     def __init__(self):
         self._connections: dict[str, WebSocket] = {}
 
@@ -31,6 +37,7 @@ class ConnectionManager:
             try:
                 await ws.send_text(payload)
             except Exception:
+                logger.exception(f"Failed to send to {uid}, disconnecting")
                 self.disconnect(uid)
 
     @property

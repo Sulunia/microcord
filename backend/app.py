@@ -1,16 +1,19 @@
 import logging
-import os
 from contextlib import asynccontextmanager
-import connexion
 from pathlib import Path
+
+import connexion
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.routing import WebSocketRoute, Mount
+
 from constants import UPLOAD_DIR, CORS_ORIGIN, AUTH_PROVIDER
+from database.repository import repo
 from services.auth import AuthMiddleware
 from services.guard import guard
+from services.media_manager import media_manager
 from services.security_headers import SecurityHeadersMiddleware
 from ws.handler import websocket_endpoint
 
@@ -29,11 +32,8 @@ FRONTEND_DIR = Path("static/frontend")
 
 @asynccontextmanager
 async def lifespan(_app):
-    from models.base import init_db
-    from services.db_writer import start_writer
-    from services.media_manager import media_manager
-    await init_db()
-    start_writer()
+    await repo.init()
+    repo.start_writer()
     media_manager.start()
     guard.log_passphrase()
     logger = logging.getLogger(__name__)
@@ -52,7 +52,6 @@ if FRONTEND_DIR.is_dir():
     _frontend_files = StaticFiles(directory=str(FRONTEND_DIR), html=True)
 
     async def _frontend_fallback(scope, receive, send):
-        """Try Connexion first; serve frontend static files for non-API paths."""
         if scope["path"].startswith("/api"):
             await connexion_app(scope, receive, send)
         else:

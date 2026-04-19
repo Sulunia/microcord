@@ -25,6 +25,13 @@ def get_client_ip(scope: dict) -> str:
 
 
 class Guard:
+    """Rate-limiting, token-revocation, and registration-passphrase guard.
+
+    Maintains in-memory buckets for exponential-backoff rate limiting
+    and a lightweight JTI revocation store.  A periodic prune sweeps
+    stale entries to keep memory bounded.
+    """
+
     _PRUNE_INTERVAL = 200
 
     def __init__(self):
@@ -38,10 +45,9 @@ class Guard:
     def log_passphrase(self) -> None:
         logger.info(f"Registration passphrase: {self.passphrase}")
 
-    # --- Token revocation (by JTI) ---
-
     def revoke_jti(self, jti: str, expires_at: float) -> None:
         self._revoked[jti] = expires_at
+        logger.debug(f"Revoked JTI {jti[:8]}… until {expires_at:.0f}")
 
     def is_jti_revoked(self, jti: str) -> bool:
         exp = self._revoked.get(jti)
@@ -52,14 +58,6 @@ class Guard:
             return False
         return True
 
-    @staticmethod
-    def is_token_revoked(token: str) -> bool:
-        import warnings
-        warnings.warn("Use is_jti_revoked instead", DeprecationWarning, stacklevel=2)
-        return False
-
-    # --- Rate limiting with exponential backoff ---
-
     def check(self, key: str, max_hits: int, window: float, max_backoff: float) -> float | None:
         now = time.time()
         bucket = self._buckets.get(key)
@@ -69,7 +67,9 @@ class Guard:
             self._buckets[key] = bucket
 
         if bucket[2] > now:
-            return bucket[2] - now
+            remaining = bucket[2] - now
+            logger.debug(f"Rate-limited {key}: {remaining:.1f}s backoff remaining")
+            return remaining
 
         if now - bucket[1] >= window:
             bucket[0] = 0
@@ -81,6 +81,7 @@ class Guard:
             violations = bucket[0] - max_hits
             backoff = min(2 ** violations, max_backoff)
             bucket[2] = now + backoff
+            logger.info(f"Rate limit exceeded for {key}: {violations} violations, {backoff:.0f}s backoff")
             self._maybe_prune()
             return backoff
 
@@ -102,7 +103,10 @@ class Guard:
     def verify_passphrase(self, provided: str) -> bool:
         if not provided:
             return False
-        return secrets.compare_digest(provided.strip().upper(), self.passphrase)
+        result = secrets.compare_digest(provided.strip().upper(), self.passphrase)
+        if not result:
+            logger.debug("Passphrase verification failed")
+        return result
 
     def _maybe_prune(self) -> None:
         self._check_count += 1
@@ -118,6 +122,8 @@ class Guard:
                  if b[2] <= now and now - b[1] > 600]
         for k in stale:
             del self._buckets[k]
+        if expired or stale:
+            logger.debug(f"Pruned {len(expired)} revoked JTIs, {len(stale)} stale rate-limit buckets")
 
 
 guard = Guard()
