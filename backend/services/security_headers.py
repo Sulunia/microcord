@@ -20,12 +20,30 @@ _SECURITY_HEADERS = {
         "font-src 'self'; "
         "frame-ancestors 'none'"
     ),
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "X-Permitted-Cross-Domain-Policies": "none",
+    "Permissions-Policy": (
+        "accelerometer=(), autoplay=(), camera=(), display-capture=(), "
+        "encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), "
+        "keyboard-map=(), magnetometer=(), microphone=(), midi=(), "
+        "payment=(), picture-in-picture=(), publickey-credentials-get=(), "
+        "screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), "
+        "xr-spatial-tracking=(), clipboard-read=(), clipboard-write=(), "
+        "gamepad=(), hid=(), idle-detection=(), serial=()"
+    ),
 }
 
 _HSTS_HEADER = {"Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"}
 
 
 class SecurityHeadersMiddleware:
+    """Injects OWASP-recommended security response headers into every HTTP response.
+
+    Includes HSTS when ``INSECURE_HTTP`` is not set.  See
+    https://owasp.org/www-project-secure-headers/ for the full reference.
+    """
+
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
         if INSECURE_HTTP:
@@ -39,9 +57,14 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
+        _STRIPPED = {b"server"}
+
         async def send_with_headers(message: dict) -> None:
             if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
+                headers = [
+                    (n, v) for n, v in message.get("headers", [])
+                    if n.lower() not in _STRIPPED
+                ]
                 for name, value in _SECURITY_HEADERS.items():
                     headers.append((name.encode("latin-1"), value.encode("latin-1")))
                 if not INSECURE_HTTP:

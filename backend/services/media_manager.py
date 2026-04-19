@@ -26,6 +26,14 @@ def _classify_media(ext: str) -> str | None:
 
 
 class MediaManager:
+    """Background worker that converts uploaded images and videos via ffmpeg.
+
+    Accepts jobs through an async queue and processes them sequentially.
+    Images are transcoded to AVIF; videos (and GIFs) are transcoded to
+    AV1/MP4.  After conversion the DB is updated and connected WebSocket
+    clients are notified.
+    """
+
     def __init__(self):
         self._queue: asyncio.Queue | None = None
         self._task: asyncio.Task | None = None
@@ -38,6 +46,7 @@ class MediaManager:
         return self._task
 
     async def enqueue(self, original_path: str, message_id: str, author_id: str):
+        logger.debug(f"Enqueued message media job: msg={message_id} file={os.path.basename(original_path)}")
         await self._queue.put({
             "original_path": original_path,
             "message_id": message_id,
@@ -45,6 +54,7 @@ class MediaManager:
         })
 
     async def enqueue_avatar(self, original_path: str, user_id: str):
+        logger.debug(f"Enqueued avatar job: user={user_id} file={os.path.basename(original_path)}")
         await self._queue.put({
             "original_path": original_path,
             "user_id": user_id,
@@ -72,11 +82,14 @@ class MediaManager:
         ext = os.path.splitext(original_path)[1].lower()
         media_type = _classify_media(ext)
 
+        logger.debug(f"Processing message media: msg={message_id} ext={ext} type={media_type}")
+
         if media_type == "image":
             converted = await self._convert_image(original_path)
         elif media_type == "video":
             converted = await self._convert_video(original_path)
         else:
+            logger.warning(f"Unknown media type for ext={ext}, skipping conversion")
             converted = None
 
         if converted:
@@ -107,8 +120,10 @@ class MediaManager:
 
         ext = os.path.splitext(original_path)[1].lower()
         if ext == ".avif":
+            logger.debug(f"Avatar already AVIF for user={user_id}, skipping conversion")
             return
 
+        logger.debug(f"Processing avatar: user={user_id} ext={ext}")
         converted = await self._convert_image(original_path)
 
         if converted:
@@ -200,6 +215,7 @@ class MediaManager:
         return f"{n / (1024 * 1024):.1f} MB"
 
     async def _run_ffmpeg(self, cmd: list[str], output_path: str) -> str | None:
+        logger.debug(f"Running ffmpeg: {' '.join(cmd)}")
         loop = asyncio.get_event_loop()
         try:
             proc = await loop.run_in_executor(

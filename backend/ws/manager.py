@@ -6,6 +6,12 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
+    """Registry of active WebSocket connections, keyed by user ID.
+
+    Provides targeted send (``send_to``) and fan-out broadcast
+    (``broadcast``) with optional sender exclusion.
+    """
+
     def __init__(self):
         self._connections: dict[str, WebSocket] = {}
 

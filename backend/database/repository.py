@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from constants import DB_URL
 from database.models import (
-    Base, User, Message, TICK_SOUNDS,
+    Base, User, Message,
     _enable_wal, _migrate_columns, _migrate_indexes,
 )
 
@@ -15,6 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 class BackendRepository:
+    """Central data-access layer for the microcord backend.
+
+    Owns the SQLAlchemy async engine, session factory, and a serialized
+    write queue.  All reads go through independent sessions; all writes
+    are funnelled through a single ``asyncio.Queue`` so that only one
+    write transaction is in flight at a time (required for SQLite).
+
+    Call :meth:`init` at startup to create tables and run lightweight
+    column/index migrations, then :meth:`start_writer` to spin up the
+    background writer task.
+    """
+
     def __init__(self, db_url: str):
         self._engine = create_async_engine(db_url, echo=False)
         event.listen(self._engine.sync_engine, "connect", _enable_wal)
