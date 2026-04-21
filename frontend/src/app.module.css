@@ -3,7 +3,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding-bottom: 0;
+  padding-bottom: 12px;
 }
 
 .shell {
@@ -23,18 +23,6 @@
 
 .resizeHandle:hover {
   background: var(--mc-accent);
-}
-
-.statusBar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 3px 10px;
-  font-size: 11px;
-  color: var(--mc-text-muted, #999);
-  border-top: 1px solid var(--mc-border, #444);
-  flex-shrink: 0;
-  user-select: none;
 }
 
 .overlay {

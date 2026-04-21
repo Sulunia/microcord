@@ -10,6 +10,7 @@ MEDIA_AV1_CRF = int(os.environ.get("MEDIA_AV1_CRF", "35"))
 MEDIA_VIDEO_SCALE = float(os.environ.get("MEDIA_VIDEO_SCALE", "1.0"))
 MEDIA_VIDEO_MAX_BITRATE = os.environ.get("MEDIA_VIDEO_MAX_BITRATE", "")
 MEDIA_FFMPEG_THREADS = int(os.environ.get("MEDIA_FFMPEG_THREADS", "2"))
+MEDIA_IMAGE_MAX_DIMENSION = int(os.environ.get("MEDIA_IMAGE_MAX_DIMENSION", "1920"))
 DEFAULT_MESSAGE_LIMIT = 50
 MAX_MESSAGE_LIMIT = 200
 MAX_MESSAGE_CONTENT_LENGTH = 4000
@@ -26,6 +27,7 @@ JWT_SECRET_FILE = "data/.jwt_secret"
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "http://localhost:5173")
 
 TRUST_PROXY = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
+TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
 INSECURE_HTTP = os.environ.get("INSECURE_HTTP", "").lower() in ("1", "true", "yes")
 
 IMAGE_URL_PREFIX = "/uploads/"
@@ -37,6 +39,7 @@ PASSWORD_MAX_LENGTH = 128
 DISPLAY_NAME_MAX_LENGTH = 40
 UPLOAD_CHUNK_SIZE = 64 * 1024
 FFMPEG_TIMEOUT_SECONDS = 300
+FFMPEG_MEMORY_LIMIT_MB = int(os.environ.get("FFMPEG_MEMORY_LIMIT_MB", "256"))
 
 _ICE_SERVERS_DEFAULT = '[{"urls": "stun:stun.l.google.com:19302"}]'
 ICE_SERVERS = json.loads(os.environ.get("ICE_SERVERS", _ICE_SERVERS_DEFAULT))

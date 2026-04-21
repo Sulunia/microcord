@@ -197,6 +197,9 @@ export function useVoice(user, wsRef) {
     if (!u || isJoined) return;
 
     try {
+      const ctx = getOrCreateAudioCtx();
+      if (ctx.state === 'suspended') await ctx.resume();
+
       const inputDeviceId = localStorage.getItem('mc-audio-input');
       const audioConstraints = inputDeviceId
         ? { deviceId: { exact: inputDeviceId } }

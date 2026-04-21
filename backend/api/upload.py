@@ -115,10 +115,11 @@ async def _stream_file(file, max_bytes: int, dest_dir: str, dest_filename: str) 
 def _delete_old_avatar(user_id: str):
     if not os.path.isdir(AVATAR_DIR):
         return
-    for ext in AVATAR_ALLOWED_EXTENSIONS:
-        path = os.path.join(AVATAR_DIR, f"{user_id}{ext}")
-        if os.path.exists(path):
-            os.remove(path)
+    prefix = f"{user_id}_"
+    for entry in os.listdir(AVATAR_DIR):
+        name, dot_ext = os.path.splitext(entry)
+        if name.startswith(prefix) and dot_ext.lower() in AVATAR_ALLOWED_EXTENSIONS:
+            os.remove(os.path.join(AVATAR_DIR, entry))
 
 
 async def upload_file(file) -> ConnexionResponse:
@@ -178,7 +179,7 @@ async def upload_avatar(file) -> ConnexionResponse:
         )
 
     _delete_old_avatar(user_id)
-    filename = f"{user_id}{ext}"
+    filename = f"{user_id}_{uuid.uuid4().hex}{ext}"
 
     result = await _stream_file(file, MAX_AVATAR_SIZE_BYTES, AVATAR_DIR, filename)
     if result is None:

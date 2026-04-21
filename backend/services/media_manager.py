@@ -1,12 +1,14 @@
 import asyncio
 import logging
 import os
+import resource
 import subprocess
 
 from constants import (
     MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE,
     MEDIA_VIDEO_MAX_BITRATE, MEDIA_FFMPEG_THREADS,
-    FFMPEG_TIMEOUT_SECONDS,
+    FFMPEG_TIMEOUT_SECONDS, FFMPEG_MEMORY_LIMIT_MB,
+    MEDIA_IMAGE_MAX_DIMENSION,
 )
 from database.repository import repo
 from ws.manager import ws_manager
@@ -155,14 +157,17 @@ class MediaManager:
         output_path = os.path.splitext(input_path)[0] + ".avif"
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
+        ]
+        if MEDIA_IMAGE_MAX_DIMENSION > 0:
+            cmd.extend(["-vf", f"scale='min({MEDIA_IMAGE_MAX_DIMENSION},iw)':'min({MEDIA_IMAGE_MAX_DIMENSION},ih)':force_original_aspect_ratio=decrease"])
+        cmd.extend([
             "-c:v", "libaom-av1",
             "-crf", str(MEDIA_AVIF_CRF),
             "-cpu-used", "6",
             "-threads", str(MEDIA_FFMPEG_THREADS),
-            "-tiles", "2x2",
             "-frames:v", "1",
             output_path,
-        ]
+        ])
         return await self._run_ffmpeg(cmd, output_path)
 
     async def _convert_video(self, input_path: str) -> str | None:
@@ -214,17 +219,29 @@ class MediaManager:
             return f"{n / 1024:.1f} KB"
         return f"{n / (1024 * 1024):.1f} MB"
 
+    @staticmethod
+    def _ffmpeg_preexec() -> None:
+        mem_bytes = FFMPEG_MEMORY_LIMIT_MB * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+
     async def _run_ffmpeg(self, cmd: list[str], output_path: str) -> str | None:
         logger.debug(f"Running ffmpeg: {' '.join(cmd)}")
         loop = asyncio.get_event_loop()
         try:
             proc = await loop.run_in_executor(
                 None,
-                lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT_SECONDS),
+                lambda: subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=FFMPEG_TIMEOUT_SECONDS,
+                    preexec_fn=self._ffmpeg_preexec,
+                ),
             )
             if proc.returncode == 0 and os.path.exists(output_path):
                 return output_path
-            logger.error(f"ffmpeg failed (rc={proc.returncode}): {proc.stderr if proc.stderr else 'no stderr'}")
+            if proc.returncode == -9:
+                logger.error(f"ffmpeg OOM-killed (limit={FFMPEG_MEMORY_LIMIT_MB}MB) for {output_path}")
+            else:
+                logger.error(f"ffmpeg failed (rc={proc.returncode}): {proc.stderr if proc.stderr else 'no stderr'}")
             if os.path.exists(output_path):
                 os.remove(output_path)
             return None

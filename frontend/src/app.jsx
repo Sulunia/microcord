@@ -6,7 +6,7 @@ import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
-import { APP_NAME, APP_VERSION, APP_TAGLINE } from './constants.js';
+import { APP_NAME, APP_TAGLINE, APP_VERSION } from './constants.js';
 import styles from './app.module.css';
 
 const MIN_SIDEBAR = 180;
@@ -42,6 +42,7 @@ function HelpModal({ onClose }) {
               <tr><td><code>---</code></td><td><hr style={{ margin: '4px 0' }} /></td></tr>
             </tbody>
           </table>
+          <p style={{ marginTop: 12, marginBottom: 0, fontSize: 11, color: 'var(--mc-text-muted, #999)' }}>v{APP_VERSION}</p>
         </div>
       </div>
     </div>
@@ -89,7 +90,7 @@ export function App() {
   return (
     <div class="window glass active" style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column', '--w7-w-bg': '#2e8b3a' }}>
       <div class="title-bar" style={{ backgroundAttachment: 'local', flexShrink: 0 }}>
-        <div class="title-bar-text">{APP_NAME}</div>
+        <div class="title-bar-text">{APP_NAME} — {APP_TAGLINE}</div>
         <div class="title-bar-controls">
           <button aria-label="Help" onClick={() => setShowHelp(true)} />
           <button aria-label="Close" title="Logout" onClick={logout} />
@@ -109,10 +110,6 @@ export function App() {
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
           <ChatPanel chat={chat} screenshare={screenshare} />
         </div>
-      </div>
-      <div class={styles.statusBar}>
-        <span>{APP_TAGLINE}</span>
-        <span>v{APP_VERSION}</span>
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
