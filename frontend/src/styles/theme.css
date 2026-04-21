@@ -15,10 +15,135 @@
   --mc-success: #3b3;
   --mc-msg-hover: rgba(0, 120, 215, 0.06);
   --mc-radius: 3px;
+  --mc-body-bg: #2e8b3a;
+  --mc-window-glass: #2e8b3a;
+  --mc-input-bg: #fff;
+  --mc-input-border: #a0a0a0;
+}
+
+[data-theme="dark"] {
+  --mc-bg: #1e1e1e;
+  --mc-bg-alt: #2a2a2a;
+  --mc-bg-input: #2a2a2a;
+  --mc-border: #444;
+  --mc-text: #e0e0e0;
+  --mc-text-secondary: #b0b0b0;
+  --mc-text-muted: #777;
+  --mc-accent: #5b9fd9;
+  --mc-accent-hover: #4a8ec8;
+  --mc-danger: #e55;
+  --mc-success: #4c4;
+  --mc-msg-hover: rgba(100, 160, 230, 0.08);
+  --mc-body-bg: #1a1a1a;
+  --mc-window-glass: #1a3a1a;
+  --mc-input-bg: #2a2a2a;
+  --mc-input-border: #555;
+
+  --w7-surface: #2a2a2a;
+  --w7-el-bg: #3a3a3a;
+  --w7-el-bg-d: #3a3a3a;
+  --w7-el-bg-s-1: #333;
+  --w7-el-bg-s-2: #2a2a2a;
+  --w7-el-sd: inset 0 0 0 1px #fff2;
+  --w7-el-sd-a: inset 1px 1px 0 #0002, inset -1px 1px 0 #0001;
+  --w7-el-bd: #555;
+  --w7-el-bd-h: #6a9ec4;
+  --w7-el-bd-a: #5a8aaa;
+  --w7-el-bd-d: #444;
+  --w7-el-c: #e0e0e0;
+  --w7-el-c-d: #777;
+  --w7-el-grad: linear-gradient(var(--w7-el-bg) 45%, var(--w7-el-bg-s-1) 45%, var(--w7-el-bg-s-2));
+  --w7-el-grad-h: linear-gradient(#4a4a4a 45%, #3a3a3a 0, #333);
+  --w7-el-grad-a: linear-gradient(#3a3a3a, #333 30% 50%, #2a2a2a 50%, #222);
+  --w7-w-bd: #0d200d;
+  --w7-sb-y: linear-gradient(to right, #222, #2a2a2a 20%);
+  --w7-sb-x: linear-gradient(to bottom, #222, #2a2a2a 20%);
+  --w7-sb-grad-h-1: #4a4a4a;
+  --w7-sb-grad-h-2: #3a3a3a;
+  --w7-sb-grad-a-1: #555;
+  --w7-sb-grad-a-2: #444;
+}
+
+[data-theme="dark"] .window {
+  color: var(--mc-text);
+}
+
+[data-theme="dark"] .title-bar {
+  color: #fff;
+}
+
+[data-theme="dark"] :where(button) {
+  color: var(--mc-text);
+}
+
+[data-theme="dark"] select {
+  color: var(--mc-text);
+}
+
+[data-theme="dark"] select option {
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] .window-body input[type="text"],
+[data-theme="dark"] .window-body input[type="password"],
+[data-theme="dark"] .window-body input[type="email"],
+[data-theme="dark"] .window-body input[type="number"],
+[data-theme="dark"] .window-body input[type="url"],
+[data-theme="dark"] .window-body input:not([type]),
+[data-theme="dark"] .window-body textarea {
+  background-color: var(--mc-input-bg) !important;
+  color: var(--mc-text) !important;
+  border-color: #555 #666 #666 #555 !important;
+}
+
+[data-theme="dark"] .window-body {
+  background: var(--w7-surface);
+  color: var(--mc-text);
+  box-shadow: 0 0 0 1px #fff1;
+}
+
+[data-theme="dark"] menu[role="tablist"] :where(button) {
+  color: var(--mc-text);
+}
+
+[data-theme="dark"] table {
+  background-color: var(--w7-surface);
+  border-color: #555;
+}
+
+[data-theme="dark"] table>thead>tr>* {
+  background: linear-gradient(180deg, #3a3a3a 45%, #333 0, #2a2a2a);
+  border-color: #555;
+}
+
+[data-theme="dark"] table th {
+  color: var(--mc-text);
+  border-color: var(--mc-border);
+}
+
+[data-theme="dark"] table td {
+  color: var(--mc-text-secondary);
+  border-color: #444;
+}
+
+[data-theme="dark"] table code {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ccc;
+}
+
+[data-theme="dark"] table td strong,
+[data-theme="dark"] table td em,
+[data-theme="dark"] table td pre {
+  color: var(--mc-text);
+}
+
+[data-theme="dark"] table td a {
+  color: var(--mc-accent);
 }
 
 body {
-  background: #2e8b3a;
+  background: var(--mc-body-bg);
   color: var(--mc-text);
 }
 

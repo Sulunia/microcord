@@ -23,7 +23,7 @@
   font-size: 0.78rem;
   color: #fff;
   margin-top: 2px;
-  border: 1px solid rgba(0,0,0,0.15);
+  border: 1px solid var(--mc-border);
   overflow: hidden;
 }
 

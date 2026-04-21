@@ -160,7 +160,7 @@ export function ChatPanel({ chat, screenshare }) {
         </>
       )}
       <div class={styles.chatSection} style={hasScreenshare ? { height: `${(1 - videoRatio) * 100}%` } : undefined}>
-        <div class={styles.messageList} ref={listRef} onScroll={onScroll}>
+        <div class={`${styles.messageList} has-scrollbar`} ref={listRef} onScroll={onScroll}>
           <div ref={contentRef} class={styles.messageContent}>
             {renderedMessages}
           </div>

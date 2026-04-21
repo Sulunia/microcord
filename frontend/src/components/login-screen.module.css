@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #2e8b3a;
+  background: var(--mc-body-bg);
 }
 
 .card {

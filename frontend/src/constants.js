@@ -13,8 +13,8 @@ export const TIMESTAMP_TODAY_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 export const USER_STORAGE_KEY = 'microcord_user';
 export const TOKEN_STORAGE_KEY = 'microcord_token';
 
-export const APP_VERSION = '0.3.0';
-export const APP_TAGLINE = 'Microcord \u2014 a mini self-hostable chat app';
+export const APP_VERSION = '0.5.0';
+export const APP_TAGLINE = 'Microcord';
 
 export const CHAT_PAGE_SIZE = 30;
 

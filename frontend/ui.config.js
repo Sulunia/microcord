@@ -1,5 +1,5 @@
 export const UI_CONFIG = {
-  appName: '🔊 Microcord',
+  appName: '🔊 MyServer',
   voiceChannelName: 'Voice channel',
 
   screenshare: {
