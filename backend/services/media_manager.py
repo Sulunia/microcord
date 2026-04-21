@@ -219,7 +219,6 @@ class MediaManager:
     def _ffmpeg_preexec() -> None:
         mem_bytes = FFMPEG_MEMORY_LIMIT_MB * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
-        resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
 
     async def _run_ffmpeg(self, cmd: list[str], output_path: str) -> str | None:
         logger.debug(f"Running ffmpeg: {' '.join(cmd)}")
