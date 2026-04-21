@@ -3,7 +3,7 @@ import os
 import secrets
 import time
 
-from constants import TRUST_PROXY
+from constants import TRUST_PROXY, TRUSTED_PROXY_HOPS
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +14,14 @@ def get_client_ip(scope: dict) -> str:
             k.decode().lower(): v.decode()
             for k, v in scope.get("headers", [])
         }
-        xff = headers.get("x-forwarded-for", "")
-        if xff:
-            return xff.split(",")[0].strip()
         xri = headers.get("x-real-ip", "")
         if xri:
             return xri.strip()
+        xff = headers.get("x-forwarded-for", "")
+        if xff:
+            parts = [p.strip() for p in xff.split(",")]
+            idx = len(parts) - TRUSTED_PROXY_HOPS
+            return parts[idx] if 0 <= idx < len(parts) else parts[0]
     client = scope.get("client")
     return client[0] if client else "unknown"
 

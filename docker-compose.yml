@@ -29,7 +29,15 @@ services:
       - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-24}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
       - TRUST_PROXY=${TRUST_PROXY:-false}
+      - TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}
       - INSECURE_HTTP=${INSECURE_HTTP:-false}
       - MEDIA_VIDEO_SCALE=0.5
       - MEDIA_VIDEO_MAX_BITRATE=0.7M
       - MEDIA_AV1_CRF=50
+      - FFMPEG_MEMORY_LIMIT_MB=${FFMPEG_MEMORY_LIMIT_MB:-256}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${CONTAINER_MEM_LIMIT:-1g}
+    pids_limit: 256

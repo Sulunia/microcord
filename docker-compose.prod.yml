@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
@@ -15,6 +15,17 @@ services:
       - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-24}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8000}
       - TRUST_PROXY=${TRUST_PROXY:-false}
+      - TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}
       - INSECURE_HTTP=${INSECURE_HTTP:-false}
       - ICE_SERVERS=${ICE_SERVERS:-}
+      - FFMPEG_MEMORY_LIMIT_MB=${FFMPEG_MEMORY_LIMIT_MB:-256}
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: ${CONTAINER_MEM_LIMIT:-1g}
+    pids_limit: 256

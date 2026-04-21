@@ -1,12 +1,13 @@
 import asyncio
 import logging
 import os
+import resource
 import subprocess
 
 from constants import (
     MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE,
     MEDIA_VIDEO_MAX_BITRATE, MEDIA_FFMPEG_THREADS,
-    FFMPEG_TIMEOUT_SECONDS,
+    FFMPEG_TIMEOUT_SECONDS, FFMPEG_MEMORY_LIMIT_MB,
 )
 from database.repository import repo
 from ws.manager import ws_manager
@@ -214,17 +215,30 @@ class MediaManager:
             return f"{n / 1024:.1f} KB"
         return f"{n / (1024 * 1024):.1f} MB"
 
+    @staticmethod
+    def _ffmpeg_preexec() -> None:
+        mem_bytes = FFMPEG_MEMORY_LIMIT_MB * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+        resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
+
     async def _run_ffmpeg(self, cmd: list[str], output_path: str) -> str | None:
         logger.debug(f"Running ffmpeg: {' '.join(cmd)}")
         loop = asyncio.get_event_loop()
         try:
             proc = await loop.run_in_executor(
                 None,
-                lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT_SECONDS),
+                lambda: subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=FFMPEG_TIMEOUT_SECONDS,
+                    preexec_fn=self._ffmpeg_preexec,
+                ),
             )
             if proc.returncode == 0 and os.path.exists(output_path):
                 return output_path
-            logger.error(f"ffmpeg failed (rc={proc.returncode}): {proc.stderr if proc.stderr else 'no stderr'}")
+            if proc.returncode == -9:
+                logger.error(f"ffmpeg OOM-killed (limit={FFMPEG_MEMORY_LIMIT_MB}MB) for {output_path}")
+            else:
+                logger.error(f"ffmpeg failed (rc={proc.returncode}): {proc.stderr if proc.stderr else 'no stderr'}")
             if os.path.exists(output_path):
                 os.remove(output_path)
             return None
