@@ -25,18 +25,6 @@
   background: var(--mc-accent);
 }
 
-.statusBar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 3px 10px;
-  font-size: 11px;
-  color: var(--mc-text-muted, #999);
-  border-top: 1px solid var(--mc-border, #444);
-  flex-shrink: 0;
-  user-select: none;
-}
-
 .overlay {
   position: fixed;
   inset: 0;

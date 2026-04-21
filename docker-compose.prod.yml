@@ -18,7 +18,7 @@ services:
       - TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}
       - INSECURE_HTTP=${INSECURE_HTTP:-false}
       - ICE_SERVERS=${ICE_SERVERS:-}
-      - FFMPEG_MEMORY_LIMIT_MB=${FFMPEG_MEMORY_LIMIT_MB:-256}
+      - FFMPEG_MEMORY_LIMIT_MB=${FFMPEG_MEMORY_LIMIT_MB:-512}
       - MEDIA_IMAGE_MAX_DIMENSION=${MEDIA_IMAGE_MAX_DIMENSION:-1920}
     restart: unless-stopped
     cap_drop:
@@ -28,5 +28,5 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    mem_limit: ${CONTAINER_MEM_LIMIT:-1g}
+    mem_limit: ${CONTAINER_MEM_LIMIT:-2g}
     pids_limit: 256

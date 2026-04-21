@@ -34,11 +34,11 @@ services:
       - MEDIA_VIDEO_SCALE=0.5
       - MEDIA_VIDEO_MAX_BITRATE=0.7M
       - MEDIA_AV1_CRF=50
-      - FFMPEG_MEMORY_LIMIT_MB=${FFMPEG_MEMORY_LIMIT_MB:-256}
+      - FFMPEG_MEMORY_LIMIT_MB=${FFMPEG_MEMORY_LIMIT_MB:-512}
       - MEDIA_IMAGE_MAX_DIMENSION=${MEDIA_IMAGE_MAX_DIMENSION:-1920}
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    mem_limit: ${CONTAINER_MEM_LIMIT:-1g}
+    mem_limit: ${CONTAINER_MEM_LIMIT:-2g}
     pids_limit: 256
