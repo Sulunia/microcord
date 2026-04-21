@@ -8,6 +8,7 @@ from constants import (
     MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE,
     MEDIA_VIDEO_MAX_BITRATE, MEDIA_FFMPEG_THREADS,
     FFMPEG_TIMEOUT_SECONDS, FFMPEG_MEMORY_LIMIT_MB,
+    MEDIA_IMAGE_MAX_DIMENSION,
 )
 from database.repository import repo
 from ws.manager import ws_manager
@@ -156,14 +157,17 @@ class MediaManager:
         output_path = os.path.splitext(input_path)[0] + ".avif"
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
+        ]
+        if MEDIA_IMAGE_MAX_DIMENSION > 0:
+            cmd.extend(["-vf", f"scale='min({MEDIA_IMAGE_MAX_DIMENSION},iw)':'min({MEDIA_IMAGE_MAX_DIMENSION},ih)':force_original_aspect_ratio=decrease"])
+        cmd.extend([
             "-c:v", "libaom-av1",
             "-crf", str(MEDIA_AVIF_CRF),
             "-cpu-used", "6",
             "-threads", str(MEDIA_FFMPEG_THREADS),
-            "-tiles", "2x2",
             "-frames:v", "1",
             output_path,
-        ]
+        ])
         return await self._run_ffmpeg(cmd, output_path)
 
     async def _convert_video(self, input_path: str) -> str | None:
