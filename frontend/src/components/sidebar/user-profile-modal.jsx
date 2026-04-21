@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'preact/hooks';
 import styles from './sidebar.module.css';
 import { TICK_SOUNDS } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
+import { useTheme } from '../../hooks/use-theme.js';
 
 const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
 const AVATAR_ACCEPT = 'image/jpeg,image/png,image/avif';
@@ -19,6 +20,7 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
   const [selectedInput, setSelectedInput] = useState(() => localStorage.getItem('mc-audio-input') || '');
   const [selectedOutput, setSelectedOutput] = useState(() => localStorage.getItem('mc-audio-output') || '');
   const [selectedTick, setSelectedTick] = useState(1);
+  const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
   const tickAudioRef = useRef(null);
 
@@ -214,6 +216,17 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
                   </div>
                 ))}
               </div>
+            </div>
+            <div class={styles.profileFieldGroup}>
+              <label for="theme-select">Theme</label>
+              <select
+                id="theme-select"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+              >
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
             </div>
             <div class={styles.profileModalActions}>
               {onLogout && (

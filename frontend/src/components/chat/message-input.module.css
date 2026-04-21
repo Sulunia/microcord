@@ -21,7 +21,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--mc-bg-input);
   border: 1px solid var(--mc-border);
   color: var(--mc-text);
   font-size: 0.65rem;

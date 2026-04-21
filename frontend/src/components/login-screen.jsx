@@ -28,7 +28,7 @@ export function LoginScreen({ onRegister, onLogin, error }) {
 
   return (
     <div class={styles.container}>
-      <div class="window glass active" style={{ width: 380, '--w7-w-bg': '#2e8b3a' }}>
+      <div class="window glass active" style={{ width: 380, '--w7-w-bg': 'var(--mc-window-glass)' }}>
         <div class="title-bar">
           <div class="title-bar-text">{APP_NAME}</div>
         </div>
