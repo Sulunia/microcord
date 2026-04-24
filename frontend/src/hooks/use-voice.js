@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { API_BASE } from '../constants.js';
+import { API_BASE, LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
 import { authHeaders } from './use-user.js';
 
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -71,13 +71,10 @@ export function useVoice(user, wsRef) {
     const userId = user?.id;
 
     useEffect(() => {
-        fetch(`${API_BASE}/voice/config`, { headers: authHeaders() })
-            .then((r) => r.ok ? r.json() : null)
-            .then((cfg) => {
-                if (cfg?.ice_servers) iceServersRef.current = cfg.ice_servers;
-                if (cfg?.audio) audioConfigRef.current = { ...DEFAULT_AUDIO_CONFIG, ...cfg.audio };
-            })
-            .catch(() => {});
+        initLiveMediaConfig().then(() => {
+            iceServersRef.current = LIVE_MEDIA_CONFIG.iceServers;
+            audioConfigRef.current = LIVE_MEDIA_CONFIG.audio;
+        });
     }, []);
 
     const fetchParticipants = useCallback(async () => {

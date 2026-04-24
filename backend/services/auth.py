@@ -24,6 +24,7 @@ _jwt_secret: str | None = None
 
 AUTH_EXEMPT_PREFIXES = (
     "/api/auth/",
+    "/api/branding",
     "/uploads/",
 )
 

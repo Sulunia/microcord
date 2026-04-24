@@ -153,10 +153,9 @@ export function useChat(user) {
         headers: authHeaders(),
         body: form,
       });
-      if (uploadRes.ok) {
-        const data = await uploadRes.json();
-        image_url = data.url;
-      }
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const data = await uploadRes.json();
+      image_url = data.url;
     }
 
     if (!text.trim() && !image_url) return;
@@ -166,6 +165,8 @@ export function useChat(user) {
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ content: text, image_url }),
     });
+
+    if (!res.ok) throw new Error('Send failed');
 
     if (res.ok) {
       const msgData = await res.json();
