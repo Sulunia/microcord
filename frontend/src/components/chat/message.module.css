@@ -169,12 +169,11 @@
 .deleteBtn {
   position: absolute;
   right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 4px;
   background: var(--mc-bg-alt);
   border: 1px solid var(--mc-border);
   border-radius: 3px;
-  padding: 2px 4px;
+  padding: 3px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
