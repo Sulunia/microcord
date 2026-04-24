@@ -4,7 +4,7 @@ from connexion import request as connexion_request
 from database.repository import repo
 from services.voice_room import voice_room
 from ws.manager import ws_manager
-from constants import ICE_SERVERS
+from constants import ICE_SERVERS, VOICE_ECHO_CANCELLATION, VOICE_NOISE_SUPPRESSION, VOICE_AUTO_GAIN_CONTROL, VOICE_OPUS_BITRATE, VOICE_OPUS_STEREO
 
 logger = logging.getLogger(__name__)
 
@@ -85,4 +85,13 @@ async def get_participants() -> list[dict]:
 
 
 async def get_voice_config() -> dict:
-    return {"ice_servers": ICE_SERVERS}
+    return {
+        "ice_servers": ICE_SERVERS,
+        "audio": {
+            "echo_cancellation": VOICE_ECHO_CANCELLATION,
+            "noise_suppression": VOICE_NOISE_SUPPRESSION,
+            "auto_gain_control": VOICE_AUTO_GAIN_CONTROL,
+            "opus_bitrate": VOICE_OPUS_BITRATE,
+            "opus_stereo": VOICE_OPUS_STEREO,
+        },
+    }
