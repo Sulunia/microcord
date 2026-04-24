@@ -8,14 +8,14 @@ servers:
   - url: /api
 
 paths:
-  /config:
+  /branding:
     get:
-      operationId: api.config.get_config
-      summary: Get public UI configuration (app name, voice channel name, etc.)
+      operationId: api.config.get_branding
+      summary: Get public UI branding (app name, voice channel name)
       security: []
       responses:
         "200":
-          description: UI configuration
+          description: UI branding
           content:
             application/json:
               schema:

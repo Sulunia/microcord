@@ -5,7 +5,7 @@ const config = {
 
 export async function initConfig() {
     try {
-        const res = await fetch('/api/config');
+        const res = await fetch('/api/branding');
         if (!res.ok) return;
         const data = await res.json();
         if (data.name) config.name = data.name;

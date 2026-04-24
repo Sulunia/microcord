@@ -1,5 +1,8 @@
 import json
+import logging
 import os
+
+logger = logging.getLogger("config")
 
 
 def _env(key, default):
@@ -71,3 +74,13 @@ VOICE_CHANNEL_NAME = _env("VOICE_CHANNEL_NAME", "Voice channel")
 SCREENSHARE_WIDTH = _env_int("SCREENSHARE_WIDTH", 1920)
 SCREENSHARE_HEIGHT = _env_int("SCREENSHARE_HEIGHT", 1080)
 SCREENSHARE_FRAME_RATE = _env_int("SCREENSHARE_FRAME_RATE", 60)
+
+SENSITIVE_VARS = {"JWT_SECRET", "JWT_SECRET_FILE", "DB_URL"}
+
+logger.info("Resolved config:")
+for _k, _v in sorted(globals().items()):
+    if _k.startswith("_") or _k[0].islower() or callable(_v) or _k == "logger":
+        continue
+    if _k in SENSITIVE_VARS:
+        continue
+    logger.info("  %s = %r", _k, _v)
