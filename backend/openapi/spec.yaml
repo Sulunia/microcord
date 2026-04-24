@@ -11,7 +11,7 @@ paths:
   /config:
     get:
       operationId: api.config.get_config
-      summary: Get public UI configuration (app name, tagline, etc.)
+      summary: Get public UI configuration (app name, voice channel name, etc.)
       security: []
       responses:
         "200":
@@ -535,8 +535,6 @@ components:
       type: object
       properties:
         name:
-          type: string
-        tagline:
           type: string
         voice_channel_name:
           type: string

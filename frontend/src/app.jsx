@@ -112,8 +112,7 @@ export function App() {
         </div>
       </div>
       <div class={styles.statusBar}>
-        <span>{UI_CONFIG.tagline}</span>
-        <span>v{APP_VERSION}</span>
+        <span></span>
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>

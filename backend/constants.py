@@ -67,7 +67,6 @@ VOICE_OPUS_BITRATE = max(6000, min(510000, _env_int("VOICE_OPUS_BITRATE", 32000)
 VOICE_OPUS_STEREO = _env("VOICE_OPUS_STEREO", "false").lower() in ("1", "true", "yes")
 
 APP_NAME = _env("APP_NAME", "\U0001f50a Microcord")
-APP_TAGLINE = _env("APP_TAGLINE", "Microcord \u2014 a mini self-hostable chat app")
 VOICE_CHANNEL_NAME = _env("VOICE_CHANNEL_NAME", "Voice channel")
 SCREENSHARE_WIDTH = _env_int("SCREENSHARE_WIDTH", 1920)
 SCREENSHARE_HEIGHT = _env_int("SCREENSHARE_HEIGHT", 1080)
