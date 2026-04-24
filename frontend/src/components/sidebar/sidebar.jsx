@@ -64,7 +64,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
 
   return (
     <aside class={styles.sidebar} style={style}>
-      <div class={styles.channel}>
+      <div class={`${styles.channel} has-scrollbar`}>
         <div class={styles.channelHeader}>
           <span class={styles.channelIcon}>🔊</span>
           <span class={styles.channelName}>{VOICE_CHANNEL_NAME}</span>

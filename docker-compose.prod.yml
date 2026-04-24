@@ -17,6 +17,7 @@ services:
       - JWT_EXPIRY_HOURS=${JWT_EXPIRY_HOURS:-24}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8000}
       - TRUST_PROXY=${TRUST_PROXY:-false}
+      - TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}
       - INSECURE_HTTP=${INSECURE_HTTP:-false}
       - ICE_SERVERS=${ICE_SERVERS:-}
       - VOICE_ECHO_CANCELLATION=${VOICE_ECHO_CANCELLATION:-true}
@@ -32,3 +33,12 @@ services:
       - SSL_CERTFILE=/certs/fullchain.pem
       - SSL_KEYFILE=/certs/privkey.pem
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: ${CONTAINER_MEM_LIMIT:-2g}
+    pids_limit: 256

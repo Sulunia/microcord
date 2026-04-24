@@ -17,6 +17,7 @@ Open **http://localhost:5173** — register an account and start chatting. The r
 - **Screen sharing** — peer-to-peer WebRTC video + system audio, one sharer at a time
 - **Real-time** — instant message broadcast via WebSocket
 - **User profiles** — editable display name and avatar
+- **Dark mode** — light/dark theme toggle, persisted per-browser
 - **Resizable sidebars/separators** — drag to resize
 
 ## Architecture

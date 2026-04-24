@@ -15,7 +15,7 @@
   letter-spacing: 0.3px;
   border-bottom: 1px solid var(--mc-border);
   color: var(--mc-text);
-  background: linear-gradient(to bottom, #fafafa, #e8e8e8);
+  background: linear-gradient(to bottom, var(--mc-bg-alt), var(--mc-bg));
 }
 
 .channel {
@@ -52,7 +52,7 @@
   list-style: none;
   padding: 2px 6px;
   margin: 0 8px 8px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--mc-border);
   border-radius: var(--mc-radius);
   flex: 1;
 }
