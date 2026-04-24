@@ -9,6 +9,8 @@ import { useScreenshare } from './hooks/use-screenshare.js';
 import { UI_CONFIG } from './constants.js';
 import styles from './app.module.css';
 
+const isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 480;
 const DEFAULT_SIDEBAR = 240;
@@ -88,13 +90,15 @@ export function App() {
 
   return (
     <div class="window glass active" style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column', '--w7-w-bg': 'var(--mc-window-glass)' }}>
-      <div class="title-bar" style={{ backgroundAttachment: 'local', flexShrink: 0 }}>
-        <div class="title-bar-text">{UI_CONFIG.name}</div>
-        <div class="title-bar-controls">
-          <button aria-label="Help" onClick={() => setShowHelp(true)} />
-          <button aria-label="Close" title="Logout" onClick={logout} />
+      {!isPwa && (
+        <div class="title-bar" style={{ backgroundAttachment: 'local', flexShrink: 0 }}>
+          <div class="title-bar-text">{UI_CONFIG.name}</div>
+          <div class="title-bar-controls">
+            <button aria-label="Help" onClick={() => setShowHelp(true)} />
+            <button aria-label="Close" title="Logout" onClick={logout} />
+          </div>
         </div>
-      </div>
+      )}
       <div class={styles.body}>
         <div class={styles.shell}>
           <Sidebar
