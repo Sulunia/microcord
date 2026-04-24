@@ -41,7 +41,8 @@ microcord/
 ├── README.md
 ├── docs/
 │   ├── INTROSPECTION.md        # Cursor rule: keep this guide in sync
-│   └── repo-guide.md           # ← you are here
+│   ├── repo-guide.md           # ← you are here
+│   └── security-audit.md       # Security audit notes
 ├── backend/
 │   ├── Dockerfile              # Python image, uvicorn --reload
 │   ├── requirements.txt
@@ -57,17 +58,15 @@ microcord/
 │   │   ├── users.py            # list_users, get_user, update_user
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar
-│   ├── models/
-│   │   ├── base.py             # SQLAlchemy async engine, init_db, column migration
-│   │   ├── user.py             # User model
-│   │   └── message.py          # Message model
+│   ├── database/
+│   │   ├── models.py           # SQLAlchemy models (User, Message)
+│   │   └── repository.py      # Async repository (single-writer queue for SQLite safety)
 │   ├── services/
 │   │   ├── auth.py             # JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
-│   │   ├── db_writer.py        # Single-writer asyncio queue for SQLite safety
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
 │   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling)
-│   │   ├── voice_room.py       # In-memory voice participants, single-sharer tracking
+│   │   ├── voice_room.py       # In-memory voice participants, per-user mute state, single-sharer tracking
 │   │   └── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
 │   └── ws/
 │       ├── manager.py          # Per-user WebSocket map, broadcast, send_to
@@ -86,9 +85,13 @@ microcord/
 │       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
 │       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref
 │       │   ├── use-voice.js    # Voice join/leave, mute toggle, WebRTC mesh for P2P audio, DOM-attached <audio> elements
-│       │   └── use-screenshare.js  # WebRTC mesh, signaling over shared WS
+│       │   ├── use-screenshare.js  # WebRTC mesh, signaling over shared WS
+│       │   └── use-theme.js    # Light/dark theme toggle, persisted in localStorage
 │       ├── components/
 │       │   ├── login-screen.jsx
+│       │   ├── login-screen.module.css
+│       │   ├── alert-modal.jsx
+│       │   ├── alert-modal.module.css
 │       │   ├── sidebar/
 │       │   │   ├── sidebar.jsx             # Voice channel, participant list, screenshare controls
 │       │   │   ├── user-profile-modal.jsx
@@ -208,7 +211,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 
 ## 6. Data Models
 
-### User (`backend/models/user.py`)
+### User (`backend/database/models.py`)
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -220,7 +223,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `is_admin` | Boolean | Default `False` |
 | `created_at` | DateTime | UTC, auto-set |
 
-### Message (`backend/models/message.py`)
+### Message (`backend/database/models.py`)
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -279,7 +282,7 @@ Starlette is provided transitively through Connexion.
 ### Chat message
 
 1. Client `POST /api/messages` with `{ content, image_url? }`.
-2. Handler enqueues DB write via `db_writer` (single-writer queue).
+2. Handler enqueues DB write via `repository` (single-writer queue).
 3. After write, `ws_manager.broadcast` sends `chat_message` to all connected WebSocket clients.
 4. Clients receive and render in real time; `use-chat.js` appends to local message list.
 5. Pagination: `GET /api/messages?limit=30&before=<uuid>` fetches older pages on scroll-up.
@@ -397,7 +400,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Upload size limits | Chat images: 50 MB (`MAX_UPLOAD_SIZE_BYTES`), avatars: 1 MB (`MAX_AVATAR_SIZE_BYTES`) |
 | Image URL validation | Only `/uploads/`-prefixed URLs accepted in messages and avatars |
 | Password storage | bcrypt hashing via `bcrypt >=4.0` |
-| Single-writer DB | All mutations through asyncio queue — prevents SQLite concurrent-write corruption |
+| Single-writer DB | All mutations through asyncio queue in `repository` — prevents SQLite concurrent-write corruption |
 | Security headers | `SecurityHeadersMiddleware` adds `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Content-Security-Policy`, and `Strict-Transport-Security` (HSTS, 2-year max-age). HSTS is omitted when `INSECURE_HTTP=true` |
 | Proxy-aware rate limiting | When `TRUST_PROXY=true`, rate limiting reads `X-Forwarded-For` / `X-Real-IP` for client IP extraction |
 | Non-root Docker | Both Dockerfiles create and use `appuser` for the process |
