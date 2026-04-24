@@ -421,3 +421,26 @@
 .shareBtnActive {
   color: var(--mc-danger);
 }
+
+.helpBtn {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--mc-border);
+  background: var(--mc-bg-alt);
+  color: var(--mc-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.helpBtn:hover {
+  color: var(--mc-text);
+  background: var(--mc-msg-hover);
+}
