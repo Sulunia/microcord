@@ -11,6 +11,7 @@ export function MessageInput({ onSend }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [sending, setSending] = useState(false);
   const fileRef = useRef(null);
   const textareaRef = useRef(null);
   const dragCounterRef = useRef(0);
@@ -68,6 +69,7 @@ export function MessageInput({ onSend }) {
   }, [processFile]);
 
   const handleKeyDown = (e) => {
+    if (sending) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -89,14 +91,21 @@ export function MessageInput({ onSend }) {
   };
 
   const submit = async () => {
-    if (!text.trim() && !imageFile) return;
+    if (sending || (!text.trim() && !imageFile)) return;
     if (text.length > MAX_MESSAGE_LENGTH) {
       setAlertMsg(`Chat message is too large (max ${MAX_MESSAGE_LENGTH.toLocaleString()} characters).`);
       return;
     }
-    await onSend(text, imageFile);
-    setText('');
-    clearImage();
+    setSending(true);
+    try {
+      await onSend(text, imageFile);
+      setText('');
+      clearImage();
+    } catch {
+      setAlertMsg('Failed to send message. Please try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -133,6 +142,7 @@ export function MessageInput({ onSend }) {
           onClick={() => fileRef.current?.click()}
           title="Attach media"
           type="button"
+          disabled={sending}
         >
           📎
         </button>
@@ -152,9 +162,10 @@ export function MessageInput({ onSend }) {
           onInput={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          disabled={sending}
         />
-        <button class={styles.sendBtn} onClick={submit} title="Send" type="button">
-          ➤
+        <button class={styles.sendBtn} onClick={submit} title="Send" type="button" disabled={sending}>
+          {sending ? <span class={styles.spinner} /> : '➤'}
         </button>
       </div>
       {alertMsg && <AlertModal message={alertMsg} onClose={() => setAlertMsg(null)} />}
