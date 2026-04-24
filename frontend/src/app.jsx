@@ -6,7 +6,7 @@ import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
-import { UI_CONFIG, APP_VERSION } from './constants.js';
+import { UI_CONFIG } from './constants.js';
 import styles from './app.module.css';
 
 const isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -44,7 +44,6 @@ function HelpModal({ onClose }) {
               <tr><td><code>---</code></td><td><hr style={{ margin: '4px 0' }} /></td></tr>
             </tbody>
           </table>
-          <p style={{ marginTop: 12, marginBottom: 0, fontSize: 11, color: 'var(--mc-text-muted, #999)' }}>Microcord {APP_VERSION}</p>
         </div>
       </div>
     </div>
@@ -100,7 +99,7 @@ export function App() {
           </div>
         </div>
       )}
-      <div class={isPwa ? styles.bodyPwa : styles.body}>
+      <div class={styles.body}>
         <div class={styles.shell}>
           <Sidebar
             voice={voice}
@@ -108,7 +107,6 @@ export function App() {
             onUpdateProfile={updateProfile}
             onUploadAvatar={uploadAvatar}
             onLogout={logout}
-            onHelp={() => setShowHelp(true)}
             screenshare={screenshare}
             style={{ width: sidebarWidth, minWidth: sidebarWidth }}
           />
@@ -116,11 +114,6 @@ export function App() {
           <ChatPanel chat={chat} screenshare={screenshare} currentUser={user} />
         </div>
       </div>
-      {!isPwa && (
-        <div class={styles.statusBar}>
-          <span></span>
-        </div>
-      )}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );

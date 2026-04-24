@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.5.1**.
+Version **0.5.3**.
 
 ---
 

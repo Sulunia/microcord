@@ -6,11 +6,6 @@
   padding-bottom: 12px;
 }
 
-.bodyPwa {
-  composes: body;
-  padding-bottom: 0;
-}
-
 .shell {
   display: flex;
   flex: 1;

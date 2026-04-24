@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'preact/hooks';
 import styles from './sidebar.module.css';
-import { TICK_SOUNDS } from '../../constants.js';
+import { TICK_SOUNDS, APP_VERSION } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
 import { useTheme } from '../../hooks/use-theme.js';
 
@@ -250,6 +250,7 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
                 Save
               </button>
             </div>
+            <p class={styles.profileVersion}>Microcord {APP_VERSION}</p>
           </form>
         </div>
       </div>

@@ -386,6 +386,13 @@
   flex: 1;
 }
 
+.profileVersion {
+  margin: 8px 0 0;
+  font-size: 0.68rem;
+  color: var(--mc-text-muted);
+  text-align: center;
+}
+
 .profileCancelButton,
 .profileSaveButton {
   padding: 4px 10px;
@@ -420,27 +427,4 @@
 
 .shareBtnActive {
   color: var(--mc-danger);
-}
-
-.helpBtn {
-  margin-left: auto;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid var(--mc-border);
-  background: var(--mc-bg-alt);
-  color: var(--mc-text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-.helpBtn:hover {
-  color: var(--mc-text);
-  background: var(--mc-msg-hover);
 }

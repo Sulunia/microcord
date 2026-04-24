@@ -25,7 +25,7 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, canWatch, onWatch,
   );
 }
 
-export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, onHelp, screenshare, style }) {
+export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style }) {
   const { participants, isJoined, join, leave } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -114,9 +114,6 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             <span class={styles.profileName}>{name}</span>
             <span class={styles.profileSubtext}>Click to edit display name</span>
           </span>
-          {onHelp && (
-            <button class={styles.helpBtn} title="Markdown help" onClick={(e) => { e.stopPropagation(); onHelp(); }}>?</button>
-          )}
         </button>
         <button
           class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
