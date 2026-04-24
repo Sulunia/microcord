@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { APP_NAME } from '../constants.js';
+import { UI_CONFIG } from '../constants.js';
 import styles from './login-screen.module.css';
 
 export function LoginScreen({ onRegister, onLogin, error }) {
@@ -30,7 +30,7 @@ export function LoginScreen({ onRegister, onLogin, error }) {
     <div class={styles.container}>
       <div class="window glass active" style={{ width: 380, '--w7-w-bg': 'var(--mc-window-glass)' }}>
         <div class="title-bar">
-          <div class="title-bar-text">{APP_NAME}</div>
+          <div class="title-bar-text">{UI_CONFIG.name}</div>
         </div>
         <div class="window-body has-space">
           <form class={styles.card} onSubmit={handleSubmit}>

@@ -49,3 +49,10 @@ VOICE_NOISE_SUPPRESSION = os.environ.get("VOICE_NOISE_SUPPRESSION", "true").lowe
 VOICE_AUTO_GAIN_CONTROL = os.environ.get("VOICE_AUTO_GAIN_CONTROL", "true").lower() in ("1", "true", "yes")
 VOICE_OPUS_BITRATE = max(6000, min(510000, int(os.environ.get("VOICE_OPUS_BITRATE", "32000"))))
 VOICE_OPUS_STEREO = os.environ.get("VOICE_OPUS_STEREO", "false").lower() in ("1", "true", "yes")
+
+APP_NAME = os.environ.get("APP_NAME", "\U0001f50a Microcord")
+APP_TAGLINE = os.environ.get("APP_TAGLINE", "Microcord \u2014 a mini self-hostable chat app")
+VOICE_CHANNEL_NAME = os.environ.get("VOICE_CHANNEL_NAME", "Voice channel")
+SCREENSHARE_WIDTH = int(os.environ.get("SCREENSHARE_WIDTH", "1920"))
+SCREENSHARE_HEIGHT = int(os.environ.get("SCREENSHARE_HEIGHT", "1080"))
+SCREENSHARE_FRAME_RATE = int(os.environ.get("SCREENSHARE_FRAME_RATE", "60"))

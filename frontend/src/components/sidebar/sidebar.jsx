@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'preact/hooks';
-import { VOICE_CHANNEL_NAME } from '../../constants.js';
+import { UI_CONFIG } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
 
@@ -67,7 +67,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
       <div class={`${styles.channel} has-scrollbar`}>
         <div class={styles.channelHeader}>
           <span class={styles.channelIcon}>🔊</span>
-          <span class={styles.channelName}>{VOICE_CHANNEL_NAME}</span>
+          <span class={styles.channelName}>{UI_CONFIG.voiceChannelName}</span>
         </div>
 
         <ul class={styles.participantList}>

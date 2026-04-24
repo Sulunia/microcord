@@ -1,5 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { SCREENSHARE_CONSTRAINTS } from '../constants.js';
+import { LIVE_MEDIA_CONFIG } from '../constants.js';
+
+function getDisplayConstraints() {
+    const s = LIVE_MEDIA_CONFIG.screenshare;
+    return {
+        video: {
+            width: { ideal: s.width },
+            height: { ideal: s.height },
+            frameRate: { ideal: s.frameRate },
+        },
+        audio: true,
+    };
+}
 
 export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
   const [isSharing, setIsSharing] = useState(false);
@@ -91,7 +103,7 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
     if (!u || !isVoiceJoined || isSharing) return;
     if (sharerUserId) return;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia(SCREENSHARE_CONSTRAINTS);
+      const stream = await navigator.mediaDevices.getDisplayMedia(getDisplayConstraints());
       localStreamRef.current = stream;
 
       stream.getVideoTracks()[0]?.addEventListener('ended', () => {

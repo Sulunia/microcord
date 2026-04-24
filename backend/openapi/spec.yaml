@@ -8,6 +8,31 @@ servers:
   - url: /api
 
 paths:
+  /config:
+    get:
+      operationId: api.config.get_config
+      summary: Get public UI configuration (app name, tagline, etc.)
+      security: []
+      responses:
+        "200":
+          description: UI configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UiConfig"
+
+  /livemediaconfig:
+    get:
+      operationId: api.livemedia.get_live_media_config
+      summary: Get live media configuration (voice, screenshare, media processing)
+      responses:
+        "200":
+          description: Live media configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveMediaConfig"
+
   /auth/register:
     post:
       operationId: api.auth.register
@@ -357,18 +382,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/VoiceParticipant"
 
-  /voice/config:
-    get:
-      operationId: api.voice.get_voice_config
-      summary: Get voice audio configuration
-      responses:
-        "200":
-          description: Voice config
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/VoiceConfig"
-
 components:
   securitySchemes:
     bearerAuth:
@@ -518,7 +531,17 @@ components:
         name:
           type: string
 
-    VoiceConfig:
+    UiConfig:
+      type: object
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        voice_channel_name:
+          type: string
+
+    LiveMediaConfig:
       type: object
       properties:
         ice_servers:
@@ -540,3 +563,31 @@ components:
               maximum: 510000
             opus_stereo:
               type: boolean
+        screenshare:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+            frame_rate:
+              type: integer
+        media:
+          type: object
+          properties:
+            avif_crf:
+              type: integer
+            av1_crf:
+              type: integer
+            video_scale:
+              type: number
+            video_max_bitrate:
+              type: string
+            ffmpeg_threads:
+              type: integer
+            ffmpeg_timeout_seconds:
+              type: integer
+            ffmpeg_memory_limit_mb:
+              type: integer
+            image_max_dimension:
+              type: integer

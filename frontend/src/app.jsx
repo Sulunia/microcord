@@ -6,7 +6,7 @@ import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
-import { APP_NAME, APP_TAGLINE, APP_VERSION } from './constants.js';
+import { UI_CONFIG, APP_VERSION } from './constants.js';
 import styles from './app.module.css';
 
 const MIN_SIDEBAR = 180;
@@ -90,7 +90,7 @@ export function App() {
   return (
     <div class="window glass active" style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column', '--w7-w-bg': 'var(--mc-window-glass)' }}>
       <div class="title-bar" style={{ backgroundAttachment: 'local', flexShrink: 0 }}>
-        <div class="title-bar-text">{APP_NAME} — {APP_TAGLINE}</div>
+        <div class="title-bar-text">{UI_CONFIG.name}</div>
         <div class="title-bar-controls">
           <button aria-label="Help" onClick={() => setShowHelp(true)} />
           <button aria-label="Close" title="Logout" onClick={logout} />
@@ -110,6 +110,10 @@ export function App() {
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
           <ChatPanel chat={chat} screenshare={screenshare} />
         </div>
+      </div>
+      <div class={styles.statusBar}>
+        <span>{UI_CONFIG.tagline}</span>
+        <span>v{APP_VERSION}</span>
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
