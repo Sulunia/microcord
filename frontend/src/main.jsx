@@ -5,9 +5,11 @@ import './styles/theme.css';
 import { initConfig } from './runtime-config.js';
 import { App } from './app.jsx';
 
-await initConfig();
-render(<App />, document.getElementById('app'));
+(async () => {
+  await initConfig();
+  render(<App />, document.getElementById('app'));
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
-}
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+})();
