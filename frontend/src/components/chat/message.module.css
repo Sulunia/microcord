@@ -141,11 +141,14 @@
 
 /* Grouped message (continuation) - no avatar/header */
 .grouped {
-  padding: 1px 14px 1px calc(14px + var(--avatar-size) + 10px);
+  padding: 1px 14px 1px calc(14px + var(--avatar-size) + 10px + 2px);
   content-visibility: auto;
   contain-intrinsic-size: 0 24px;
   position: relative;
   min-height: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .grouped:hover {
