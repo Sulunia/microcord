@@ -525,3 +525,18 @@ components:
           type: array
           items:
             type: object
+        audio:
+          type: object
+          properties:
+            echo_cancellation:
+              type: boolean
+            noise_suppression:
+              type: boolean
+            auto_gain_control:
+              type: boolean
+            opus_bitrate:
+              type: integer
+              minimum: 6000
+              maximum: 510000
+            opus_stereo:
+              type: boolean
