@@ -24,9 +24,9 @@ _SECURITY_HEADERS = {
     "Cross-Origin-Resource-Policy": "same-origin",
     "X-Permitted-Cross-Domain-Policies": "none",
     "Permissions-Policy": (
-        "accelerometer=(), autoplay=(), camera=(), display-capture=(), "
-        "encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), "
-        "keyboard-map=(), magnetometer=(), microphone=(), midi=(), "
+        "accelerometer=(), autoplay=(self), camera=(), display-capture=(self), "
+        "encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), "
+        "keyboard-map=(), magnetometer=(), microphone=(self), midi=(), "
         "payment=(), picture-in-picture=(), publickey-credentials-get=(), "
         "screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), "
         "xr-spatial-tracking=(), clipboard-read=(), clipboard-write=(), "

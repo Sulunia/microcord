@@ -9,8 +9,7 @@ export function useVoice(user, wsRef) {
   const [isJoined, setIsJoined] = useState(false);
   const streamRef = useRef(null);
   const peerConnectionsRef = useRef(new Map());
-  const audioCtxRef = useRef(null);
-  const gainNodesRef = useRef(new Map());
+  const audioElementsRef = useRef(new Map());
   const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
   const userRef = useRef(user);
   const isJoinedRef = useRef(false);
@@ -35,17 +34,6 @@ export function useVoice(user, wsRef) {
   }, []);
 
   useEffect(() => { fetchParticipants(); }, [fetchParticipants]);
-
-  const getOrCreateAudioCtx = useCallback(() => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext();
-      const outputDeviceId = localStorage.getItem('mc-audio-output');
-      if (outputDeviceId && audioCtxRef.current.setSinkId) {
-        audioCtxRef.current.setSinkId(outputDeviceId).catch(() => {});
-      }
-    }
-    return audioCtxRef.current;
-  }, []);
 
   const sendSignal = useCallback((targetId, signal) => {
     const ws = wsRef?.current;
@@ -75,25 +63,26 @@ export function useVoice(user, wsRef) {
 
     pc.ontrack = (event) => {
       const remoteStream = event.streams[0] || new MediaStream([event.track]);
-      const ctx = getOrCreateAudioCtx();
 
-      const prev = gainNodesRef.current.get(targetId);
-      if (prev) {
-        prev.source?.disconnect();
-        prev.gainNode?.disconnect();
+      let entry = audioElementsRef.current.get(targetId);
+      if (entry) {
+        entry.audio.srcObject = remoteStream;
+      } else {
+        const audio = new Audio();
+        audio.autoplay = true;
+        audio.volume = 1.0;
+        const outputDeviceId = localStorage.getItem('mc-audio-output');
+        if (outputDeviceId && audio.setSinkId) {
+          audio.setSinkId(outputDeviceId).catch(() => {});
+        }
+        audio.srcObject = remoteStream;
+        audioElementsRef.current.set(targetId, { audio, volume: 1.0 });
       }
-
-      const source = ctx.createMediaStreamSource(remoteStream);
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = prev?.volume ?? 1.0;
-      source.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      gainNodesRef.current.set(targetId, { gainNode, source, volume: prev?.volume ?? 1.0 });
     };
 
     peerConnectionsRef.current.set(targetId, pc);
     return pc;
-  }, [sendSignal, getOrCreateAudioCtx]);
+  }, [sendSignal]);
 
   const sendOffer = useCallback(async (targetId) => {
     const pc = createPC(targetId);
@@ -144,8 +133,8 @@ export function useVoice(user, wsRef) {
           const pid = msg.data.user_id;
           const pc = peerConnectionsRef.current.get(pid);
           if (pc) { pc.close(); peerConnectionsRef.current.delete(pid); }
-          const gain = gainNodesRef.current.get(pid);
-          if (gain) { gain.source?.disconnect(); gain.gainNode?.disconnect(); gainNodesRef.current.delete(pid); }
+          const entry = audioElementsRef.current.get(pid);
+          if (entry) { entry.audio.pause(); entry.audio.srcObject = null; audioElementsRef.current.delete(pid); }
           fetchParticipants();
           break;
         }
@@ -169,18 +158,14 @@ export function useVoice(user, wsRef) {
   const cleanupPeerConnections = useCallback(() => {
     peerConnectionsRef.current.forEach((pc) => pc.close());
     peerConnectionsRef.current.clear();
-    gainNodesRef.current.forEach((g) => { g.source?.disconnect(); g.gainNode?.disconnect(); });
-    gainNodesRef.current.clear();
+    audioElementsRef.current.forEach(({ audio }) => { audio.pause(); audio.srcObject = null; });
+    audioElementsRef.current.clear();
   }, []);
 
   const cleanup = useCallback(() => {
     cleanupPeerConnections();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
-      audioCtxRef.current = null;
-    }
   }, [cleanupPeerConnections]);
 
   useEffect(() => cleanup, [cleanup]);
@@ -243,10 +228,10 @@ export function useVoice(user, wsRef) {
   }, [fetchParticipants, cleanup]);
 
   const setVolume = useCallback((uid, volume) => {
-    const entry = gainNodesRef.current.get(uid);
+    const entry = audioElementsRef.current.get(uid);
     if (entry) {
       entry.volume = volume;
-      entry.gainNode.gain.value = volume;
+      entry.audio.volume = volume;
     }
   }, []);
 

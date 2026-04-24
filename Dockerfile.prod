@@ -12,7 +12,16 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 COPY --from=frontend /build/dist /app/static/frontend
-RUN useradd -m appuser && chown -R appuser /app
+COPY <<'EOF' /app/entrypoint.sh
+#!/bin/sh
+if [ -n "$SSL_CERTFILE" ] && [ -n "$SSL_KEYFILE" ]; then
+    exec uvicorn app:app --host 0.0.0.0 --port 8443 --ws-max-size 65536 \
+        --ssl-certfile "$SSL_CERTFILE" --ssl-keyfile "$SSL_KEYFILE"
+else
+    exec uvicorn app:app --host 0.0.0.0 --port 8000 --ws-max-size 65536
+fi
+EOF
+RUN chmod +x /app/entrypoint.sh && useradd -m appuser && chown -R appuser /app
 USER appuser
-EXPOSE 8000
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8000 8443
+CMD ["/app/entrypoint.sh"]

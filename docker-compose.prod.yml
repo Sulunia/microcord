@@ -4,10 +4,12 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     ports:
-      - "8000:8000"
+      - "${HTTP_PORT:-80}:8080"
+      - "${HTTPS_PORT:-443}:8443"
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
+      - ${SSL_CERT_DIR:-./certs}:/certs:ro
     environment:
       - PYTHONUNBUFFERED=1
       - AUTH_PROVIDER=${AUTH_PROVIDER:-local}
@@ -17,4 +19,11 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-false}
       - INSECURE_HTTP=${INSECURE_HTTP:-false}
       - ICE_SERVERS=${ICE_SERVERS:-}
+      - FFMPEG_MEMORY_LIMIT_MB=${FFMPEG_MEMORY_LIMIT_MB:-512}
+      - MEDIA_IMAGE_MAX_DIMENSION=${MEDIA_IMAGE_MAX_DIMENSION:-1920}
+      - MEDIA_AV1_CRF=${MEDIA_AV1_CRF:-45}
+      - MEDIA_VIDEO_SCALE=${MEDIA_VIDEO_SCALE:-}
+      - MEDIA_VIDEO_MAX_BITRATE=${MEDIA_VIDEO_MAX_BITRATE:-}
+      - SSL_CERTFILE=/certs/fullchain.pem
+      - SSL_KEYFILE=/certs/privkey.pem
     restart: unless-stopped

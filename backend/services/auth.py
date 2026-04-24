@@ -28,6 +28,12 @@ AUTH_EXEMPT_PREFIXES = (
 )
 
 
+def _is_auth_required(path: str) -> bool:
+    return path.startswith("/api/") and not any(
+        path.startswith(prefix) for prefix in AUTH_EXEMPT_PREFIXES
+    )
+
+
 def _resolve_secret() -> str:
     global _jwt_secret
     if _jwt_secret:
@@ -134,7 +140,7 @@ class AuthMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
-        if any(path.startswith(prefix) for prefix in AUTH_EXEMPT_PREFIXES):
+        if not _is_auth_required(path):
             return await self.app(scope, receive, send)
 
         headers = dict(
