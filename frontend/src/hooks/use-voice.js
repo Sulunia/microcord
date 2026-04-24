@@ -212,6 +212,16 @@ export function useVoice(user, wsRef) {
                     if (isJoinedRef.current) handleSignal(from, signal);
                     break;
                 }
+                case 'voice_mute': {
+                    const { user_id: muteUid, muted } = msg.data;
+                    setParticipants((prev) =>
+                        prev.map((p) => {
+                            const pid = p.user_id || p.id;
+                            return pid === muteUid ? { ...p, muted } : p;
+                        }),
+                    );
+                    break;
+                }
                 case 'screenshare_start':
                 case 'screenshare_stop':
                 case 'user_updated':
@@ -312,9 +322,16 @@ export function useVoice(user, wsRef) {
             if (stream) {
                 stream.getAudioTracks().forEach((t) => { t.enabled = !next; });
             }
+            const ws = wsRef?.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'voice_mute',
+                    data: { muted: next },
+                }));
+            }
             return next;
         });
-    }, []);
+    }, [wsRef]);
 
     const setVolume = useCallback((uid, volume) => {
         const entry = audioElementsRef.current.get(uid);

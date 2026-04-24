@@ -134,7 +134,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | POST | `/api/avatar` | `api.upload.upload_avatar` | Upload avatar (max 1 MB, JPEG/PNG/AVIF). Rate limited: 5/min/user |
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
 | POST | `/api/voice/leave` | `api.voice.leave_voice` | Leave voice channel |
-| GET | `/api/voice/participants` | `api.voice.get_participants` | Current voice participants (includes `sharing` flag) |
+| GET | `/api/voice/participants` | `api.voice.get_participants` | Current voice participants (includes `sharing` and `muted` flags) |
 | WS | `/ws?ticket=<ticket>` | `ws.handler.websocket_endpoint` | Real-time events, voice + screenshare signaling. Max message size: 64 KB |
 
 > *(removed 2026-04-24)* `GET /api/voice/config` — superseded by `GET /api/livemediaconfig`
@@ -165,6 +165,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `screenshare_request` | Both | Viewer requests stream from sharer (reconnect flow) |
 | `screenshare_error` | Server → Client | Sharing rejected (e.g. someone already sharing) |
 | `voice_signal` | Both | WebRTC signaling relay for voice (SDP offer/answer, ICE candidate) |
+| `voice_mute` | Both | User toggled mute state; payload `{ user_id, muted }` — server broadcasts to all clients |
 
 ---
 
@@ -302,7 +303,7 @@ Starlette is provided transitively through Connexion.
 6. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
 7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
 8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
-9. Mute toggle toggles `track.enabled` on all local audio tracks; a mute icon (🔇) appears next to the user's name in the voice participants list. Mute state resets on voice leave.
+9. Mute toggle sets `track.enabled` on all local audio tracks and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
 10. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
 
 ### Screen sharing

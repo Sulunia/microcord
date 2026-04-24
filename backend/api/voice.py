@@ -28,6 +28,7 @@ async def _resolve_participants() -> list[dict]:
             "name": users[uid].effective_name if uid in users else uid,
             "avatar_url": users[uid].avatar_url if uid in users else None,
             "sharing": uid == voice_room.sharer,
+            "muted": voice_room.is_muted(uid),
         }
         for uid in ids
     ]

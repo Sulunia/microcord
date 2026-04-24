@@ -79,7 +79,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             const isSharer = pid === sharerUserId;
             const isMe = pid === user?.id;
             const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
-            const participantMuted = isMe && isMuted;
+            const participantMuted = Boolean(p.muted);
             return (
               <Participant
                 key={pid}
