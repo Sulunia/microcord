@@ -64,6 +64,29 @@ async def list_messages(limit: int = DEFAULT_MESSAGE_LIMIT, cursor: str | None =
     return {"messages": messages, "next_cursor": next_cursor}
 
 
+async def delete_message(message_id: str) -> ConnexionResponse:
+    author_id = _get_current_user_id()
+    if not author_id:
+        return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
+
+    msg = await repo.delete_message(message_id, author_id)
+    if not msg:
+        return ConnexionResponse(status_code=404, body={"error": "Message not found or not owned by you"})
+
+    if msg.image_url:
+        basename = os.path.basename(msg.image_url)
+        filepath = os.path.join(UPLOAD_DIR, basename)
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except OSError:
+                logger.warning(f"Failed to delete file: {filepath}")
+
+    await ws_manager.broadcast({"type": "chat_message_deleted", "data": {"id": msg.id}})
+    logger.info(f"Message deleted by {author_id}: {msg.id}")
+    return ConnexionResponse(status_code=200, body={"id": msg.id})
+
+
 async def send_message(body: dict) -> ConnexionResponse:
     author_id = _get_current_user_id()
     if not author_id:

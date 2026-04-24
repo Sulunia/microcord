@@ -6,8 +6,10 @@ import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
-import { UI_CONFIG, APP_VERSION } from './constants.js';
+import { UI_CONFIG } from './constants.js';
 import styles from './app.module.css';
+
+const isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 480;
@@ -42,7 +44,6 @@ function HelpModal({ onClose }) {
               <tr><td><code>---</code></td><td><hr style={{ margin: '4px 0' }} /></td></tr>
             </tbody>
           </table>
-          <p style={{ marginTop: 12, marginBottom: 0, fontSize: 11, color: 'var(--mc-text-muted, #999)' }}>Microcord {APP_VERSION}</p>
         </div>
       </div>
     </div>
@@ -89,13 +90,15 @@ export function App() {
 
   return (
     <div class="window glass active" style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column', '--w7-w-bg': 'var(--mc-window-glass)' }}>
-      <div class="title-bar" style={{ backgroundAttachment: 'local', flexShrink: 0 }}>
-        <div class="title-bar-text">{UI_CONFIG.name}</div>
-        <div class="title-bar-controls">
-          <button aria-label="Help" onClick={() => setShowHelp(true)} />
-          <button aria-label="Close" title="Logout" onClick={logout} />
+      {!isPwa && (
+        <div class="title-bar" style={{ backgroundAttachment: 'local', flexShrink: 0 }}>
+          <div class="title-bar-text">{UI_CONFIG.name}</div>
+          <div class="title-bar-controls">
+            <button aria-label="Help" onClick={() => setShowHelp(true)} />
+            <button aria-label="Close" title="Logout" onClick={logout} />
+          </div>
         </div>
-      </div>
+      )}
       <div class={styles.body}>
         <div class={styles.shell}>
           <Sidebar
@@ -108,11 +111,8 @@ export function App() {
             style={{ width: sidebarWidth, minWidth: sidebarWidth }}
           />
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
-          <ChatPanel chat={chat} screenshare={screenshare} />
+          <ChatPanel chat={chat} screenshare={screenshare} currentUser={user} />
         </div>
-      </div>
-      <div class={styles.statusBar}>
-        <span></span>
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>

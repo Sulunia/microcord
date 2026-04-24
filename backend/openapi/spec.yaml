@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: Microcord API
-  version: "0.3.0"
+  version: "0.5.3"
   description: Minimal Discord-like self-hosted chat and voice API.
 
 servers:
@@ -265,6 +265,34 @@ paths:
           description: Not authenticated
         "429":
           description: Rate limited
+
+  /messages/{message_id}:
+    delete:
+      operationId: api.chat.delete_message
+      summary: Delete own message (hard delete)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: message_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        "401":
+          description: Not authenticated
+        "404":
+          description: Message not found or not owned by user
 
   /upload:
     post:

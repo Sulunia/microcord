@@ -19,8 +19,8 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
-export function ChatPanel({ chat, screenshare }) {
-  const { messages, sendMessage, loadOlder, hasMore } = chat;
+export function ChatPanel({ chat, screenshare, currentUser }) {
+  const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
   const listRef = useRef(null);
   const contentRef = useRef(null);
   const prevCountRef = useRef(0);
@@ -48,6 +48,8 @@ export function ChatPanel({ chat, screenshare }) {
           message={msg}
           grouped={grouped}
           animate={isNew && !grouped}
+          deletable={currentUser && getAuthorId(msg) === currentUser.id}
+          onDelete={deleteMessage}
         />
       );
     });

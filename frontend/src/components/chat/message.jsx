@@ -34,7 +34,15 @@ function Lightbox({ src, onClose }) {
   );
 }
 
-function MessageInner({ message, grouped, animate }) {
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4m2 0v9.33a1.33 1.33 0 01-1.34 1.34H4.67a1.33 1.33 0 01-1.34-1.34V4h9.34z" />
+    </svg>
+  );
+}
+
+function MessageInner({ message, grouped, animate, deletable, onDelete }) {
   const { author, content, image_url, image, created_at, timestamp, pending } = message;
   const name = author?.display_name ?? author?.name ?? 'Unknown';
   const initial = name.charAt(0).toUpperCase();
@@ -79,6 +87,11 @@ function MessageInner({ message, grouped, animate }) {
       <div class={styles.grouped}>
         {content && <div class={styles.content} dangerouslySetInnerHTML={{ __html: html }} />}
         {mediaEl}
+        {deletable && (
+          <button class={styles.deleteBtn} title="Delete message" onClick={() => onDelete(message.id)}>
+            <TrashIcon />
+          </button>
+        )}
         {preview && createPortal(<Lightbox src={imgSrc} onClose={() => setPreview(false)} />, document.body)}
       </div>
     );
@@ -99,6 +112,11 @@ function MessageInner({ message, grouped, animate }) {
         {content && <div class={styles.content} dangerouslySetInnerHTML={{ __html: html }} />}
         {mediaEl}
       </div>
+      {deletable && (
+        <button class={styles.deleteBtn} title="Delete message" onClick={() => onDelete(message.id)}>
+          <TrashIcon />
+        </button>
+      )}
       {preview && createPortal(<Lightbox src={imgSrc} onClose={() => setPreview(false)} />, document.body)}
     </div>
   );

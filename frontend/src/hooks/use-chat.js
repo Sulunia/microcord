@@ -108,6 +108,11 @@ export function useChat(user) {
             if (authorId && authorId !== currentId) {
               playTick(author?.tick_sound);
             }
+          } else if (msg.type === 'chat_message_deleted') {
+            const deletedId = msg.data?.id;
+            if (deletedId) {
+              setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+            }
           } else if (msg.type === 'user_updated') {
             const updatedUser = msg.data?.user;
             if (updatedUser?.id) {
@@ -178,10 +183,21 @@ export function useChat(user) {
     playTick(userRef.current?.tick_sound);
   }, []);
 
+  const deleteMessage = useCallback(async (messageId) => {
+    const res = await fetch(`${API_BASE}/messages/${messageId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      const { id } = await res.json();
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+    }
+  }, []);
+
   const hydratedMessages = messages.map((m) => ({
     ...m,
     author: m.author || usersMap[m.author_id] || null,
   }));
 
-  return { messages: hydratedMessages, sendMessage, loadOlder, hasMore, ws: wsRef, usersMap };
+  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, ws: wsRef, usersMap };
 }
