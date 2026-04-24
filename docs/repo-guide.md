@@ -66,6 +66,7 @@ microcord/
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
 │   │   ├── db_writer.py        # Single-writer asyncio queue for SQLite safety
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
+│   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling)
 │   │   ├── voice_room.py       # In-memory voice participants, single-sharer tracking
 │   │   └── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
 │   └── ws/
@@ -191,7 +192,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `SCREENSHARE_FRAME_RATE` | `60` | Backend | Screenshare capture frame rate |
 | `MEDIA_AVIF_CRF` | `30` | Backend | AVIF encoding quality (lower = better) |
 | `MEDIA_AV1_CRF` | `35` | Backend | AV1 video encoding quality |
-| `MEDIA_VIDEO_SCALE` | `1.0` | Backend | Video downscale factor (e.g. `0.5` for half resolution) |
+| `MEDIA_VIDEO_SCALE` | `1.0` | Backend | Video downscale factor (e.g. `0.5` for half resolution). GIFs are excluded from scaling — only transcoded to AV1/MP4 at original resolution |
 | `MEDIA_VIDEO_MAX_BITRATE` | *(empty)* | Backend | Max video bitrate (e.g. `0.7M`) |
 | `MEDIA_FFMPEG_THREADS` | `2` | Backend | FFmpeg encoding thread count |
 | `MEDIA_IMAGE_MAX_DIMENSION` | `1920` | Backend | Maximum image dimension for processing |
@@ -283,10 +284,11 @@ Starlette is provided transitively through Connexion.
 ### Image upload
 
 1. Client `POST /api/upload` with multipart file.
-2. Backend validates file extension + magic bytes (PNG/JPEG/GIF/WEBP).
+2. Backend validates file extension + magic bytes (PNG/JPEG/GIF/WEBP/MP4/WEBM/MOV).
 3. File saved to `uploads/` with a UUID filename.
 4. Returns `{ url: "/uploads/<uuid>.<ext>" }`.
 5. Client includes `image_url` in the subsequent `POST /api/messages`.
+6. Background `MediaManager` converts images to AVIF (scaled down to `MEDIA_IMAGE_MAX_DIMENSION`), videos to AV1/MP4 (scaled by `MEDIA_VIDEO_SCALE`), and GIFs to AV1/MP4 at original resolution (no scaling). After conversion the DB is updated and a `chat_message` WS broadcast replaces the placeholder URL.
 
 ### Voice
 

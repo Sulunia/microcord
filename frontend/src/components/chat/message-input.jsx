@@ -1,4 +1,4 @@
-import { useState, useRef } from 'preact/hooks';
+import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import styles from './message-input.module.css';
 import { AlertModal } from '../alert-modal.jsx';
 
@@ -10,7 +10,62 @@ export function MessageInput({ onSend }) {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef(null);
+  const textareaRef = useRef(null);
+  const dragCounterRef = useRef(0);
+
+  const processFile = useCallback((file) => {
+    if (file.size > MAX_IMAGE_BYTES) {
+      setAlertMsg('Attachment is too big to be sent (max 50 MB).');
+      return;
+    }
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+    textareaRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onDragEnter = (e) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      dragCounterRef.current++;
+      setIsDragging(true);
+    };
+    const onDragOver = (e) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+    };
+    const onDragLeave = (e) => {
+      e.preventDefault();
+      dragCounterRef.current--;
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+      }
+    };
+    const onDrop = (e) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+      const file = e.dataTransfer?.files?.[0];
+      if (file) processFile(file);
+    };
+
+    document.addEventListener('dragenter', onDragEnter);
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('dragleave', onDragLeave);
+    document.addEventListener('drop', onDrop);
+
+    return () => {
+      document.removeEventListener('dragenter', onDragEnter);
+      document.removeEventListener('dragover', onDragOver);
+      document.removeEventListener('dragleave', onDragLeave);
+      document.removeEventListener('drop', onDrop);
+    };
+  }, [processFile]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -27,14 +82,7 @@ export function MessageInput({ onSend }) {
         e.preventDefault();
         const file = item.getAsFile();
         if (!file) return;
-        if (file.size > MAX_IMAGE_BYTES) {
-          setAlertMsg('Attachment is too big to be sent (max 50 MB).');
-          return;
-        }
-        setImageFile(file);
-        const reader = new FileReader();
-        reader.onload = () => setImagePreview(reader.result);
-        reader.readAsDataURL(file);
+        processFile(file);
         return;
       }
     }
@@ -54,14 +102,7 @@ export function MessageInput({ onSend }) {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_IMAGE_BYTES) {
-      setAlertMsg('Attachment is too big to be sent (max 50 MB).');
-      return;
-    }
-    setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
+    processFile(file);
   };
 
   const clearImage = () => {
@@ -72,6 +113,14 @@ export function MessageInput({ onSend }) {
 
   return (
     <div class={styles.inputArea}>
+      {isDragging && (
+        <div class={styles.dropOverlay}>
+          <div class={styles.dropOverlayInner}>
+            <span class={styles.dropIcon}>📎</span>
+            <span>Drop file to attach</span>
+          </div>
+        </div>
+      )}
       {imagePreview && (
         <div class={styles.preview}>
           <img src={imagePreview} alt="preview" class={styles.previewImg} />
@@ -83,6 +132,7 @@ export function MessageInput({ onSend }) {
           class={styles.attachBtn}
           onClick={() => fileRef.current?.click()}
           title="Attach media"
+          type="button"
         >
           📎
         </button>
@@ -94,6 +144,7 @@ export function MessageInput({ onSend }) {
           onChange={handleFileChange}
         />
         <textarea
+          ref={textareaRef}
           class={styles.textarea}
           rows={1}
           placeholder="Message #general"
@@ -102,7 +153,7 @@ export function MessageInput({ onSend }) {
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
         />
-        <button class={styles.sendBtn} onClick={submit} title="Send">
+        <button class={styles.sendBtn} onClick={submit} title="Send" type="button">
           ➤
         </button>
       </div>

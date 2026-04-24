@@ -177,7 +177,7 @@ class MediaManager:
         is_gif = ext == ".gif"
 
         vf_filters = []
-        if MEDIA_VIDEO_SCALE != 1.0:
+        if not is_gif and MEDIA_VIDEO_SCALE != 1.0:
             s = MEDIA_VIDEO_SCALE
             vf_filters.append(f"scale=trunc(iw*{s}/2)*2:trunc(ih*{s}/2)*2:flags=lanczos")
 
