@@ -3,7 +3,7 @@ import { UI_CONFIG } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
 
-function Participant({ name, avatarUrl, isSpeaking, isSharer, canWatch, onWatch, isNew }) {
+function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch, onWatch, isNew }) {
   const initial = name.charAt(0).toUpperCase();
   return (
     <li class={`${styles.participant} ${isSpeaking ? styles.speaking : ''} ${isNew ? styles.participantNew : ''}`}>
@@ -16,6 +16,9 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, canWatch, onWatch,
         {name}
         {isSharer && <span class={styles.sharingBadge}>sharing</span>}
       </span>
+      {isMuted && (
+        <span class={styles.mutedIcon} title="Muted">🔇</span>
+      )}
       {canWatch && (
         <button class={styles.watchBtn} onClick={onWatch} title="Watch stream">
           ▶
@@ -26,7 +29,7 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, canWatch, onWatch,
 }
 
 export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style }) {
-  const { participants, isJoined, join, leave } = voice;
+  const { participants, isJoined, isMuted, join, leave, toggleMute } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const prevIdsRef = useRef(new Set());
@@ -76,6 +79,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             const isSharer = pid === sharerUserId;
             const isMe = pid === user?.id;
             const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
+            const participantMuted = Boolean(p.muted);
             return (
               <Participant
                 key={pid}
@@ -83,6 +87,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
                 avatarUrl={p.avatar_url}
                 isSpeaking={p.isSpeaking}
                 isSharer={isSharer}
+                isMuted={participantMuted}
                 canWatch={canWatch}
                 onWatch={screenshare?.requestStream}
                 isNew={newIds.has(pid)}
@@ -93,28 +98,39 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
       </div>
 
       <div class={styles.controls}>
-        <button
-          class={styles.profileButton}
-          type="button"
-          onClick={() => setIsProfileOpen(true)}
-          title="Open profile settings"
-        >
-          <span class={styles.profileAvatar}>
-            {hasAvatar ? (
-              <img
-                src={user.avatar_url}
-                onError={() => setAvatarError(true)}
-                alt={name}
-              />
-            ) : (
-              <span>{initial}</span>
-            )}
-          </span>
-          <span class={styles.profileInfo}>
-            <span class={styles.profileName}>{name}</span>
-            <span class={styles.profileSubtext}>Click to edit display name</span>
-          </span>
-        </button>
+        <div class={styles.profileRow}>
+          <button
+            class={styles.profileButton}
+            type="button"
+            onClick={() => setIsProfileOpen(true)}
+            title="Open profile settings"
+          >
+            <span class={styles.profileAvatar}>
+              {hasAvatar ? (
+                <img
+                  src={user.avatar_url}
+                  onError={() => setAvatarError(true)}
+                  alt={name}
+                />
+              ) : (
+                <span>{initial}</span>
+              )}
+            </span>
+            <span class={styles.profileInfo}>
+              <span class={styles.profileName}>{name}</span>
+              <span class={styles.profileSubtext}>Click to edit display name</span>
+            </span>
+          </button>
+          {isJoined && (
+            <button
+              class={`${styles.muteBtn} ${isMuted ? styles.muteBtnActive : ''}`}
+              onClick={toggleMute}
+              title={isMuted ? 'Unmute' : 'Mute'}
+            >
+              {isMuted ? '🔇' : '🎤'}
+            </button>
+          )}
+        </div>
         <button
           class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
           onClick={isJoined ? leave : join}

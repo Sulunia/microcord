@@ -57,6 +57,7 @@ function mungeOpusSdp(sdp, bitrate, stereo) {
 export function useVoice(user, wsRef) {
     const [participants, setParticipants] = useState([]);
     const [isJoined, setIsJoined] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
     const streamRef = useRef(null);
     const peerConnectionsRef = useRef(new Map());
     const audioElementsRef = useRef(new Map());
@@ -211,6 +212,16 @@ export function useVoice(user, wsRef) {
                     if (isJoinedRef.current) handleSignal(from, signal);
                     break;
                 }
+                case 'voice_mute': {
+                    const { user_id: muteUid, muted } = msg.data;
+                    setParticipants((prev) =>
+                        prev.map((p) => {
+                            const pid = p.user_id || p.id;
+                            return pid === muteUid ? { ...p, muted } : p;
+                        }),
+                    );
+                    break;
+                }
                 case 'screenshare_start':
                 case 'screenshare_stop':
                 case 'user_updated':
@@ -238,6 +249,7 @@ export function useVoice(user, wsRef) {
         cleanupPeerConnections();
         streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
+        setIsMuted(false);
     }, [cleanupPeerConnections]);
 
     useEffect(() => cleanup, [cleanup]);
@@ -303,6 +315,24 @@ export function useVoice(user, wsRef) {
         await fetchParticipants();
     }, [fetchParticipants, cleanup]);
 
+    const toggleMute = useCallback(() => {
+        setIsMuted((prev) => {
+            const next = !prev;
+            const stream = streamRef.current;
+            if (stream) {
+                stream.getAudioTracks().forEach((t) => { t.enabled = !next; });
+            }
+            const ws = wsRef?.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'voice_mute',
+                    data: { muted: next },
+                }));
+            }
+            return next;
+        });
+    }, [wsRef]);
+
     const setVolume = useCallback((uid, volume) => {
         const entry = audioElementsRef.current.get(uid);
         if (entry) {
@@ -311,5 +341,5 @@ export function useVoice(user, wsRef) {
         }
     }, []);
 
-    return { participants, isJoined, join, leave, setVolume, fetchParticipants };
+    return { participants, isJoined, isMuted, join, leave, toggleMute, setVolume, fetchParticipants };
 }

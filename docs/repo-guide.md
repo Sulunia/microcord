@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.5.3**.
+Version **0.5.4**.
 
 ---
 
@@ -41,7 +41,8 @@ microcord/
 ├── README.md
 ├── docs/
 │   ├── INTROSPECTION.md        # Cursor rule: keep this guide in sync
-│   └── repo-guide.md           # ← you are here
+│   ├── repo-guide.md           # ← you are here
+│   └── security-audit.md       # Security audit notes
 ├── backend/
 │   ├── Dockerfile              # Python image, uvicorn --reload
 │   ├── requirements.txt
@@ -57,17 +58,15 @@ microcord/
 │   │   ├── users.py            # list_users, get_user, update_user
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar
-│   ├── models/
-│   │   ├── base.py             # SQLAlchemy async engine, init_db, column migration
-│   │   ├── user.py             # User model
-│   │   └── message.py          # Message model
+│   ├── database/
+│   │   ├── models.py           # SQLAlchemy models (User, Message)
+│   │   └── repository.py      # Async repository (single-writer queue for SQLite safety)
 │   ├── services/
 │   │   ├── auth.py             # JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
-│   │   ├── db_writer.py        # Single-writer asyncio queue for SQLite safety
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
 │   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling)
-│   │   ├── voice_room.py       # In-memory voice participants, single-sharer tracking
+│   │   ├── voice_room.py       # In-memory voice participants, per-user mute state, single-sharer tracking
 │   │   └── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
 │   └── ws/
 │       ├── manager.py          # Per-user WebSocket map, broadcast, send_to
@@ -85,10 +84,14 @@ microcord/
 │       ├── hooks/
 │       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
 │       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref
-│       │   ├── use-voice.js    # Voice join/leave, WebRTC mesh for P2P audio, DOM-attached <audio> elements
-│       │   └── use-screenshare.js  # WebRTC mesh, signaling over shared WS
+│       │   ├── use-voice.js    # Voice join/leave, mute toggle, WebRTC mesh for P2P audio, DOM-attached <audio> elements
+│       │   ├── use-screenshare.js  # WebRTC mesh, signaling over shared WS
+│       │   └── use-theme.js    # Light/dark theme toggle, persisted in localStorage
 │       ├── components/
 │       │   ├── login-screen.jsx
+│       │   ├── login-screen.module.css
+│       │   ├── alert-modal.jsx
+│       │   ├── alert-modal.module.css
 │       │   ├── sidebar/
 │       │   │   ├── sidebar.jsx             # Voice channel, participant list, screenshare controls
 │       │   │   ├── user-profile-modal.jsx
@@ -134,7 +137,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | POST | `/api/avatar` | `api.upload.upload_avatar` | Upload avatar (max 1 MB, JPEG/PNG/AVIF). Rate limited: 5/min/user |
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
 | POST | `/api/voice/leave` | `api.voice.leave_voice` | Leave voice channel |
-| GET | `/api/voice/participants` | `api.voice.get_participants` | Current voice participants (includes `sharing` flag) |
+| GET | `/api/voice/participants` | `api.voice.get_participants` | Current voice participants (includes `sharing` and `muted` flags) |
 | WS | `/ws?ticket=<ticket>` | `ws.handler.websocket_endpoint` | Real-time events, voice + screenshare signaling. Max message size: 64 KB |
 
 > *(removed 2026-04-24)* `GET /api/voice/config` — superseded by `GET /api/livemediaconfig`
@@ -165,6 +168,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `screenshare_request` | Both | Viewer requests stream from sharer (reconnect flow) |
 | `screenshare_error` | Server → Client | Sharing rejected (e.g. someone already sharing) |
 | `voice_signal` | Both | WebRTC signaling relay for voice (SDP offer/answer, ICE candidate) |
+| `voice_mute` | Both | User toggled mute state; payload `{ user_id, muted }` — server broadcasts to all clients |
 
 ---
 
@@ -207,7 +211,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 
 ## 6. Data Models
 
-### User (`backend/models/user.py`)
+### User (`backend/database/models.py`)
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -219,7 +223,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `is_admin` | Boolean | Default `False` |
 | `created_at` | DateTime | UTC, auto-set |
 
-### Message (`backend/models/message.py`)
+### Message (`backend/database/models.py`)
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -278,7 +282,7 @@ Starlette is provided transitively through Connexion.
 ### Chat message
 
 1. Client `POST /api/messages` with `{ content, image_url? }`.
-2. Handler enqueues DB write via `db_writer` (single-writer queue).
+2. Handler enqueues DB write via `repository` (single-writer queue).
 3. After write, `ws_manager.broadcast` sends `chat_message` to all connected WebSocket clients.
 4. Clients receive and render in real time; `use-chat.js` appends to local message list.
 5. Pagination: `GET /api/messages?limit=30&before=<uuid>` fetches older pages on scroll-up.
@@ -302,7 +306,8 @@ Starlette is provided transitively through Connexion.
 6. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
 7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
 8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
-9. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
+9. Mute toggle sets `track.enabled` on all local audio tracks and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
+10. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
 
 ### Screen sharing
 
@@ -395,7 +400,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Upload size limits | Chat images: 50 MB (`MAX_UPLOAD_SIZE_BYTES`), avatars: 1 MB (`MAX_AVATAR_SIZE_BYTES`) |
 | Image URL validation | Only `/uploads/`-prefixed URLs accepted in messages and avatars |
 | Password storage | bcrypt hashing via `bcrypt >=4.0` |
-| Single-writer DB | All mutations through asyncio queue — prevents SQLite concurrent-write corruption |
+| Single-writer DB | All mutations through asyncio queue in `repository` — prevents SQLite concurrent-write corruption |
 | Security headers | `SecurityHeadersMiddleware` adds `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Content-Security-Policy`, and `Strict-Transport-Security` (HSTS, 2-year max-age). HSTS is omitted when `INSECURE_HTTP=true` |
 | Proxy-aware rate limiting | When `TRUST_PROXY=true`, rate limiting reads `X-Forwarded-For` / `X-Real-IP` for client IP extraction |
 | Non-root Docker | Both Dockerfiles create and use `appuser` for the process |
