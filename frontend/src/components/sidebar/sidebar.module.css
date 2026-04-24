@@ -140,7 +140,7 @@
 }
 
 .profileButton {
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -427,4 +427,44 @@
 
 .shareBtnActive {
   color: var(--mc-danger);
+}
+
+.profileRow {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.muteBtn {
+  flex-shrink: 0;
+  width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: var(--mc-bg);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  font-size: 1rem;
+  padding: 0;
+}
+
+.muteBtn:hover {
+  background: var(--mc-msg-hover);
+}
+
+.muteBtnActive {
+  background: var(--mc-danger);
+  border-color: var(--mc-danger);
+  opacity: 0.85;
+}
+
+.muteBtnActive:hover {
+  opacity: 1;
+}
+
+.mutedIcon {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  line-height: 1;
 }

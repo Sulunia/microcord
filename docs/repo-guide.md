@@ -85,7 +85,7 @@ microcord/
 │       ├── hooks/
 │       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
 │       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref
-│       │   ├── use-voice.js    # Voice join/leave, WebRTC mesh for P2P audio, DOM-attached <audio> elements
+│       │   ├── use-voice.js    # Voice join/leave, mute toggle, WebRTC mesh for P2P audio, DOM-attached <audio> elements
 │       │   └── use-screenshare.js  # WebRTC mesh, signaling over shared WS
 │       ├── components/
 │       │   ├── login-screen.jsx
@@ -302,7 +302,8 @@ Starlette is provided transitively through Connexion.
 6. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
 7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
 8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
-9. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
+9. Mute toggle toggles `track.enabled` on all local audio tracks; a mute icon (🔇) appears next to the user's name in the voice participants list. Mute state resets on voice leave.
+10. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
 
 ### Screen sharing
 
