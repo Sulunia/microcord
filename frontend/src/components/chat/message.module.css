@@ -145,6 +145,7 @@
   content-visibility: auto;
   contain-intrinsic-size: 0 24px;
   position: relative;
+  min-height: 24px;
 }
 
 .grouped:hover {
@@ -168,12 +169,14 @@
 
 .deleteBtn {
   position: absolute;
-  right: 6px;
-  top: 4px;
+  right: 4px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
   background: var(--mc-bg-alt);
   border: 1px solid var(--mc-border);
   border-radius: 3px;
-  padding: 3px;
+  padding: 0;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
@@ -181,7 +184,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
+  line-height: 0;
+  flex-shrink: 0;
 }
 
 .deleteBtn:hover {
