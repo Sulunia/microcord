@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.3.0**.
+Version **0.5.1**.
 
 ---
 
@@ -52,8 +52,10 @@ microcord/
 │   ├── api/                    # Route handlers (operationId targets)
 │   │   ├── auth.py             # register, login, me, status, ws_ticket, logout
 │   │   ├── chat.py             # list_messages, send_message
+│   │   ├── config.py           # get_branding (app name, voice channel name)
+│   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
 │   │   ├── users.py            # list_users, get_user, update_user
-│   │   ├── voice.py            # join, leave, participants, config
+│   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar
 │   ├── models/
 │   │   ├── base.py             # SQLAlchemy async engine, init_db, column migration
@@ -72,16 +74,17 @@ microcord/
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.js          # Preact preset, proxy to backend container
-│   ├── ui.config.js            # App name, voice channel name, screenshare resolution
 │   ├── index.html
 │   └── src/
 │       ├── main.jsx            # Mount <App />, import global styles
 │       ├── app.jsx             # Shell: login vs main window, hook composition, resizable sidebar
-│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size
+│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
+│       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
+│       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
 │       ├── hooks/
 │       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
 │       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref
-│       │   ├── use-voice.js    # Voice join/leave, WebRTC mesh for P2P audio, per-user GainNode volume
+│       │   ├── use-voice.js    # Voice join/leave, WebRTC mesh for P2P audio, DOM-attached <audio> elements
 │       │   └── use-screenshare.js  # WebRTC mesh, signaling over shared WS
 │       ├── components/
 │       │   ├── login-screen.jsx
@@ -112,6 +115,8 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
+| GET | `/api/branding` | `api.config.get_branding` | Public UI branding (app name, voice channel name). No auth required |
+| GET | `/api/livemediaconfig` | `api.livemedia.get_live_media_config` | Live media config (ICE servers, audio, screenshare, media processing). Requires JWT |
 | GET | `/api/auth/status` | `api.auth.status` | Auth provider info (`{ "provider": "local" }`) |
 | POST | `/api/auth/register` | `api.auth.register` | Register (name + password + passphrase) → user + JWT. Rate limited: 3/hour/IP |
 | POST | `/api/auth/login` | `api.auth.login` | Login (name + password) → user + JWT. Rate limited: 5/min/IP |
@@ -128,8 +133,10 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
 | POST | `/api/voice/leave` | `api.voice.leave_voice` | Leave voice channel |
 | GET | `/api/voice/participants` | `api.voice.get_participants` | Current voice participants (includes `sharing` flag) |
-| GET | `/api/voice/config` | `api.voice.get_voice_config` | ICE server configuration for WebRTC |
 | WS | `/ws?ticket=<ticket>` | `ws.handler.websocket_endpoint` | Real-time events, voice + screenshare signaling. Max message size: 64 KB |
+
+> *(removed 2026-04-24)* `GET /api/voice/config` — superseded by `GET /api/livemediaconfig`
+> *(removed 2026-04-24)* `GET /api/config` — superseded by `GET /api/branding`
 
 Swagger UI: `http://localhost:8000/api/ui/`
 
@@ -167,16 +174,31 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `JWT_EXPIRY_HOURS` | `24` | Backend | Token lifetime in hours |
 | `CORS_ORIGIN` | `http://localhost:5173` | Backend | Allowed CORS origin |
 | `REGISTRATION_PASSPHRASE` | *(auto-generated)* | Backend | 6-digit hex uppercase passphrase required for registration; auto-generated and logged on startup if not set |
-| `ICE_SERVERS` | `[{"urls":"stun:stun.l.google.com:19302"}]` | Backend | JSON array of ICE server objects for WebRTC (STUN/TURN) |
 | `TRUST_PROXY` | `false` | Backend | Trust `X-Forwarded-For` / `X-Real-IP` headers for rate limiting. Enable when behind a reverse proxy |
+| `TRUSTED_PROXY_HOPS` | `1` | Backend | Number of trusted proxy hops for IP extraction |
 | `INSECURE_HTTP` | `false` | Backend | Skip HSTS header. Enable for local/dev HTTP; in production, use a TLS-terminating reverse proxy instead |
 | `MAX_UPLOAD_SIZE_MB` | `50` | Backend | Maximum upload size in megabytes |
+| `APP_NAME` | `🔊 Microcord` | Backend | Application name shown in title bar and login screen |
+| `VOICE_CHANNEL_NAME` | `Voice channel` | Backend | Display name for the voice channel in the sidebar |
+| `ICE_SERVERS` | `[{"urls":"stun:stun.l.google.com:19302"}]` | Backend | JSON array of ICE server objects for WebRTC (STUN/TURN) |
+| `VOICE_ECHO_CANCELLATION` | `true` | Backend | Enable echo cancellation for voice |
+| `VOICE_NOISE_SUPPRESSION` | `true` | Backend | Enable noise suppression for voice |
+| `VOICE_AUTO_GAIN_CONTROL` | `true` | Backend | Enable automatic gain control for voice |
+| `VOICE_OPUS_BITRATE` | `32000` | Backend | Opus codec bitrate (6000–510000 bps) |
+| `VOICE_OPUS_STEREO` | `false` | Backend | Enable stereo Opus audio |
+| `SCREENSHARE_WIDTH` | `1920` | Backend | Screenshare capture width |
+| `SCREENSHARE_HEIGHT` | `1080` | Backend | Screenshare capture height |
+| `SCREENSHARE_FRAME_RATE` | `60` | Backend | Screenshare capture frame rate |
 | `MEDIA_AVIF_CRF` | `30` | Backend | AVIF encoding quality (lower = better) |
 | `MEDIA_AV1_CRF` | `35` | Backend | AV1 video encoding quality |
 | `MEDIA_VIDEO_SCALE` | `1.0` | Backend | Video downscale factor (e.g. `0.5` for half resolution) |
 | `MEDIA_VIDEO_MAX_BITRATE` | *(empty)* | Backend | Max video bitrate (e.g. `0.7M`) |
 | `MEDIA_FFMPEG_THREADS` | `2` | Backend | FFmpeg encoding thread count |
+| `MEDIA_IMAGE_MAX_DIMENSION` | `1920` | Backend | Maximum image dimension for processing |
+| `FFMPEG_MEMORY_LIMIT_MB` | `256` | Backend | FFmpeg memory limit in MB |
 | `CHOKIDAR_USEPOLLING` | `true` | Frontend (Docker) | Enable file-system polling for Vite HMR in containers |
+
+> *(removed 2026-04-24)* `APP_TAGLINE` — tagline removed from UI; endpoint no longer returns it
 
 ---
 
@@ -247,7 +269,7 @@ Starlette is provided transitively through Connexion.
 6. Client stores `token` and `user` in `localStorage`.
 7. All subsequent HTTP requests include `Authorization: Bearer <token>`.
 8. For WebSocket, client first calls `POST /api/auth/ws-ticket` to obtain a one-time ticket, then connects with `?ticket=<ticket>`. The ticket is consumed on handshake and expires in 30 seconds.
-9. `AuthMiddleware` enforces JWT on all HTTP routes except `/api/auth/*` and `/uploads/*`. Revoked tokens are rejected.
+9. `AuthMiddleware` enforces JWT on all HTTP routes except `/api/auth/*`, `/api/branding`, and `/uploads/*`. Revoked tokens are rejected.
 10. `POST /api/auth/logout` revokes the current JWT server-side (in-memory blocklist), preventing reuse of stolen tokens.
 
 ### Chat message
@@ -268,13 +290,15 @@ Starlette is provided transitively through Connexion.
 
 ### Voice
 
-1. Client `POST /api/voice/join` → backend adds user to in-memory `voice_room`, returns participant list.
-2. `voice_participant_joined` broadcast to all WS clients.
-3. Joiner creates an `RTCPeerConnection` (mesh) to each existing participant and sends SDP offers via `voice_signal`.
-4. Existing participants receive offers, create answers, and send them back via `voice_signal`.
-5. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
-6. Remote audio routed through `AudioContext` + per-user `GainNode` for volume control.
-7. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
+1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, audio constraints).
+2. Client `POST /api/voice/join` → backend adds user to in-memory `voice_room`, returns participant list.
+3. `voice_participant_joined` broadcast to all WS clients.
+4. Joiner creates an `RTCPeerConnection` (mesh) to each existing participant and sends SDP offers via `voice_signal`.
+5. Existing participants receive offers, create answers, and send them back via `voice_signal`.
+6. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
+7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
+8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
+9. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
 
 ### Screen sharing
 
@@ -352,7 +376,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 
 | Control | Implementation |
 |---------|----------------|
-| Auth always on | Every HTTP and WS request requires a valid JWT (WS via one-time ticket) |
+| Auth always on | Every HTTP and WS request requires a valid JWT (WS via one-time ticket), except `/api/auth/*`, `/api/branding`, and `/uploads/*` |
 | Identity from JWT | Author/user IDs derived from token, never from request bodies |
 | IDOR protection | `PATCH /users/{id}` rejects modifications to other users |
 | XSS sanitization | Chat markdown rendered with snarkdown, sanitized with DOMPurify |
