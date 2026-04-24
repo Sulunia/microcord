@@ -108,7 +108,7 @@ export function App() {
             style={{ width: sidebarWidth, minWidth: sidebarWidth }}
           />
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
-          <ChatPanel chat={chat} screenshare={screenshare} />
+          <ChatPanel chat={chat} screenshare={screenshare} currentUser={user} />
         </div>
       </div>
       <div class={styles.statusBar}>

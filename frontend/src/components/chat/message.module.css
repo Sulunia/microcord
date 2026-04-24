@@ -5,6 +5,7 @@
   transition: background 0.1s;
   content-visibility: auto;
   contain-intrinsic-size: 0 52px;
+  position: relative;
 }
 
 .message:hover {
@@ -143,6 +144,7 @@
   padding: 1px 14px 1px calc(14px + var(--avatar-size) + 10px);
   content-visibility: auto;
   contain-intrinsic-size: 0 24px;
+  position: relative;
 }
 
 .grouped:hover {
@@ -161,5 +163,34 @@
 }
 
 .grouped:hover .groupedTimestamp {
+  opacity: 1;
+}
+
+.deleteBtn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--mc-bg-alt);
+  border: 1px solid var(--mc-border);
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: var(--mc-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.deleteBtn:hover {
+  color: var(--mc-danger);
+  background: var(--mc-bg);
+}
+
+.message:hover .deleteBtn,
+.grouped:hover .deleteBtn {
   opacity: 1;
 }

@@ -181,6 +181,19 @@ class BackendRepository:
 
         return await self._enqueue_write(_write)
 
+    async def delete_message(self, message_id: str, author_id: str) -> Message | None:
+        async def _write(session):
+            result = await session.execute(select(Message).where(Message.id == message_id))
+            msg = result.scalar_one_or_none()
+            if not msg:
+                return None
+            if msg.author_id != author_id:
+                return None
+            await session.delete(msg)
+            return msg
+
+        return await self._enqueue_write(_write)
+
     async def update_message_image(self, message_id: str, image_url: str) -> Message | None:
         async def _write(session):
             result = await session.execute(select(Message).where(Message.id == message_id))

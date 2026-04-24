@@ -51,7 +51,7 @@ microcord/
 │   │   └── spec.yaml           # OpenAPI 3.0 spec — all endpoints & schemas
 │   ├── api/                    # Route handlers (operationId targets)
 │   │   ├── auth.py             # register, login, me, status, ws_ticket, logout
-│   │   ├── chat.py             # list_messages, send_message
+│   │   ├── chat.py             # list_messages, send_message, delete_message
 │   │   ├── config.py           # get_branding (app name, voice channel name)
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
 │   │   ├── users.py            # list_users, get_user, update_user
@@ -129,6 +129,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | PATCH | `/api/users/{id}` | `api.users.update_user` | Update own display_name (IDOR-protected) |
 | GET | `/api/messages` | `api.chat.list_messages` | Paginated history (`?limit=&cursor=`) |
 | POST | `/api/messages` | `api.chat.send_message` | Send message (author from JWT, broadcasts via WS). Rate limited: 10/10s/user |
+| DELETE | `/api/messages/{id}` | `api.chat.delete_message` | Hard-delete own message (author from JWT, deletes associated file, broadcasts deletion via WS) |
 | POST | `/api/upload` | `api.upload.upload_file` | Upload image (max 50 MB, magic-byte validated). Rate limited: 5/min/user |
 | POST | `/api/avatar` | `api.upload.upload_avatar` | Upload avatar (max 1 MB, JPEG/PNG/AVIF). Rate limited: 5/min/user |
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
@@ -154,6 +155,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | Type | Direction | Payload / Purpose |
 |------|-----------|-------------------|
 | `chat_message` | Server → Client | New message broadcast (same shape as `Message` schema) |
+| `chat_message_deleted` | Server → Client | Message deleted; payload `{ id }` — clients remove from local list |
 | `voice_participant_joined` | Server → Client | User joined voice |
 | `voice_participant_left` | Server → Client | User left voice |
 | `user_updated` | Server → Client | User profile changed (display_name, avatar) |
@@ -380,7 +382,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 |---------|----------------|
 | Auth always on | Every HTTP and WS request requires a valid JWT (WS via one-time ticket), except `/api/auth/*`, `/api/branding`, and `/uploads/*` |
 | Identity from JWT | Author/user IDs derived from token, never from request bodies |
-| IDOR protection | `PATCH /users/{id}` rejects modifications to other users |
+| IDOR protection | `PATCH /users/{id}` rejects modifications to other users; `DELETE /messages/{id}` rejects deletion of other users' messages |
 | XSS sanitization | Chat markdown rendered with snarkdown, sanitized with DOMPurify |
 | JWT algorithm pinning | Only HS256 accepted; `none` and others rejected |
 | JWT validation | Issuer, audience, and expiry enforced on every decode |
