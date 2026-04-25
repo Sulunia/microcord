@@ -9,43 +9,50 @@
 
 .header {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--mc-border);
   flex-shrink: 0;
-  min-height: 32px;
+  min-height: 28px;
+  padding-top: 2px;
 }
 
-.headerChannel {
+.tablist {
+  margin: 0;
+  padding: 0;
+  padding-left: 6px;
+  display: flex;
+  align-items: stretch;
+}
+
+.tab {
+  font-size: 0.82rem;
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--mc-text);
+  gap: 3px;
 }
 
 .hash {
   color: var(--mc-text-muted);
   font-weight: 400;
+  font-size: 0.78rem;
 }
 
 .membersBtn {
   background: none;
-  border: 1px solid transparent;
+  border: none;
   cursor: pointer;
-  padding: 3px 5px;
-  border-radius: var(--mc-radius);
+  padding: 2px 6px;
   color: var(--mc-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
+  margin-right: 6px;
+  border-radius: var(--mc-radius);
 }
 
 .membersBtn:hover {
   background: var(--mc-msg-hover);
-  border-color: var(--mc-border);
 }
 
 .membersBtnActive {

@@ -148,10 +148,11 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
   return (
     <main class={styles.panel} ref={panelRef}>
       <div class={styles.header}>
-        <span class={styles.headerChannel}>
-          <span class={styles.hash}>#</span>
-          general
-        </span>
+        <menu role="tablist" class={styles.tablist}>
+          <button role="tab" aria-selected="true" class={styles.tab}>
+            <span class={styles.hash}>#</span> general
+          </button>
+        </menu>
         <button
           class={`${styles.membersBtn} ${showMembers ? styles.membersBtnActive : ''}`}
           onClick={onToggleMembers}
