@@ -43,7 +43,7 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
     const existing = peerConnectionsRef.current.get(targetId);
     if (existing) existing.close();
 
-    const pc = new RTCPeerConnection();
+    const pc = new RTCPeerConnection({ iceServers: LIVE_MEDIA_CONFIG.iceServers });
     if (stream) {
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
     }

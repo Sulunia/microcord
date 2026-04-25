@@ -24,7 +24,28 @@ function avatarColor(name) {
   return `hsl(${hue}, 45%, 48%)`;
 }
 
-const sanitizeOptions = { USE_PROFILES: { html: true }, FORBID_TAGS: ['style'], FORBID_ATTR: ['style'] };
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+        node.setAttribute('rel', 'noopener noreferrer');
+    }
+});
+
+const sanitizeOptions = { USE_PROFILES: { html: true }, FORBID_TAGS: ['style'], FORBID_ATTR: ['style'], ADD_ATTR: ['target'] };
+
+const LINKED_RE = /(<a\s[^>]*>[\s\S]*?<\/a>)|((?:https?:\/\/)[^\s<>"')\]]+)/gi;
+
+function autolink(html) {
+    return html.replace(LINKED_RE, (m, existingLink, bareUrl) => {
+        if (existingLink) return existingLink;
+        const href = bareUrl.replace(/[.,;:!?>]+$/, '');
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`;
+    });
+}
+
+function renderMd(content) {
+    const html = snarkdown(content || '');
+    return DOMPurify.sanitize(autolink(html), sanitizeOptions);
+}
 
 function Lightbox({ src, onClose }) {
   return (
@@ -47,7 +68,7 @@ function MessageInner({ message, grouped, animate, deletable, onDelete }) {
   const name = author?.display_name ?? author?.name ?? 'Unknown';
   const initial = name.charAt(0).toUpperCase();
   const html = useMemo(
-    () => DOMPurify.sanitize(snarkdown(content || ''), sanitizeOptions),
+    () => renderMd(content),
     [content],
   );
   const [preview, setPreview] = useState(false);
