@@ -270,9 +270,19 @@ export function useVoice(user, wsRef) {
 
             switch (msg.type) {
                 case 'voice_participant_joined':
+                    if (isJoinedRef.current) {
+                        const enterAudio = new Audio('/sounds/EnterVoice.wav');
+                        enterAudio.volume = 0.6;
+                        enterAudio.play().catch(() => {});
+                    }
                     fetchParticipants();
                     break;
                 case 'voice_participant_left': {
+                    if (isJoinedRef.current) {
+                        const exitAudio = new Audio('/sounds/ExitVoice.wav');
+                        exitAudio.volume = 0.8;
+                        exitAudio.play().catch(() => {});
+                    }
                     const pid = msg.data.user_id;
                     const pc = peerConnectionsRef.current.get(pid);
                     if (pc) { pc.close(); peerConnectionsRef.current.delete(pid); }
