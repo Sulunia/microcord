@@ -20,7 +20,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
   const [selectedInput, setSelectedInput] = useState(() => localStorage.getItem('mc-audio-input') || '');
   const [selectedOutput, setSelectedOutput] = useState(() => localStorage.getItem('mc-audio-output') || '');
   const [selectedTick, setSelectedTick] = useState(1);
-  const [vadSensitivity, setVadSensitivity] = useState(() => parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 10);
+  const [vadSensitivity, setVadSensitivity] = useState(() => parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50);
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
   const tickAudioRef = useRef(null);

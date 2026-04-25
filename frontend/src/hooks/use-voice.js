@@ -70,7 +70,6 @@ export function useVoice(user, wsRef) {
     const vadAudioCtxRef = useRef(null);
     const vadAnalyserRef = useRef(null);
     const vadRafRef = useRef(null);
-    const vadSensitivityRef = useRef(parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 10);
     const vadSpeakingRef = useRef(false);
     const vadLastChangeRef = useRef(0);
 
@@ -84,14 +83,6 @@ export function useVoice(user, wsRef) {
             iceServersRef.current = LIVE_MEDIA_CONFIG.iceServers;
             audioConfigRef.current = LIVE_MEDIA_CONFIG.audio;
         });
-    }, []);
-
-    useEffect(() => {
-        const handler = () => {
-            vadSensitivityRef.current = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 10;
-        };
-        window.addEventListener('storage', handler);
-        return () => window.removeEventListener('storage', handler);
     }, []);
 
     const stopVad = useCallback(() => {
@@ -116,7 +107,9 @@ export function useVoice(user, wsRef) {
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.3;
         source.connect(analyser);
+        if (audioCtx.state === 'suspended') audioCtx.resume();
 
         vadAudioCtxRef.current = audioCtx;
         vadAnalyserRef.current = analyser;
@@ -132,8 +125,8 @@ export function useVoice(user, wsRef) {
                 sum += v * v;
             }
             const rms = Math.sqrt(sum / data.length);
-            const sensitivity = vadSensitivityRef.current;
-            const threshold = (101 - sensitivity) / 100 * 0.5;
+            const sensitivity = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50;
+            const threshold = (100 - sensitivity) / 100 * 0.12 + 0.003;
             const now = performance.now();
 
             if (rms > threshold !== vadSpeakingRef.current) {
