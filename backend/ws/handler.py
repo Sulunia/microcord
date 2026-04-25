@@ -4,6 +4,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from ws.manager import ws_manager
 from services.voice_room import voice_room
 from services.ws_ticket import redeem_ticket
+from database.repository import repo
 from constants import MAX_WEBSOCKET_MESSAGE_SIZE
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,19 @@ async def websocket_endpoint(websocket: WebSocket):
         return
 
     await ws_manager.connect(user_id, websocket)
+
+    user_obj = await repo.get_user_by_id(user_id)
+    user_data = user_obj.to_dict() if user_obj else {"id": user_id}
+
+    await ws_manager.send_to(user_id, {
+        "type": "presence_init",
+        "data": {"user_ids": ws_manager.connected_user_ids},
+    })
+
+    await ws_manager.broadcast(
+        {"type": "presence_online", "data": {"user_id": user_id, "user": user_data}},
+        exclude=user_id,
+    )
 
     if voice_room.sharer:
         await ws_manager.send_to(user_id, {
@@ -84,6 +98,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 exclude=user_id,
             )
         ws_manager.disconnect(user_id)
+        await ws_manager.broadcast(
+            {"type": "presence_offline", "data": {"user_id": user_id}},
+        )
 
 
 async def _handle_screenshare_start(user_id: str):

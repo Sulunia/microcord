@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: Microcord API
-  version: "0.5.5"
+  version: "0.7.0"
   description: Minimal Discord-like self-hosted chat and voice API.
 
 servers:
@@ -166,6 +166,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/User"
+
+  /users/online:
+    get:
+      operationId: api.users.get_online_users
+      summary: Get list of currently online user IDs (WebSocket-connected)
+      responses:
+        "200":
+          description: Online user IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineUsersResponse"
 
   /users/{user_id}:
     get:
@@ -549,6 +561,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/VoiceParticipant"
+
+    OnlineUsersResponse:
+      type: object
+      properties:
+        user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
 
     VoiceParticipant:
       type: object

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'preact/hooks';
 import { Sidebar } from './components/sidebar/sidebar.jsx';
 import { ChatPanel } from './components/chat/chat-panel.jsx';
+import { MembersSidebar } from './components/chat/members-sidebar.jsx';
 import { LoginScreen } from './components/login-screen.jsx';
 import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
@@ -57,6 +58,7 @@ export function App() {
   const screenshare = useScreenshare(user, chat.ws, voice.participants, voice.isJoined);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [showHelp, setShowHelp] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const dragging = useRef(false);
 
   const onMouseDown = useCallback((e) => {
@@ -111,7 +113,18 @@ export function App() {
             style={{ width: sidebarWidth, minWidth: sidebarWidth }}
           />
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
-          <ChatPanel chat={chat} screenshare={screenshare} currentUser={user} />
+          <div class={styles.mainArea}>
+            <ChatPanel
+              chat={chat}
+              screenshare={screenshare}
+              currentUser={user}
+              showMembers={showMembers}
+              onToggleMembers={() => setShowMembers((v) => !v)}
+            />
+            {showMembers && (
+              <MembersSidebar usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} />
+            )}
+          </div>
         </div>
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}

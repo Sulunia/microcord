@@ -7,6 +7,75 @@
   background: var(--mc-bg);
 }
 
+.header {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  flex-shrink: 0;
+  min-height: 28px;
+  padding-top: 2px;
+}
+
+.tablist {
+  margin: 0;
+  padding: 0;
+  padding-left: 6px;
+  display: flex;
+  align-items: stretch;
+}
+
+.tab {
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.addTab {
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 2px 6px;
+  color: var(--mc-text-muted);
+  cursor: pointer;
+}
+
+.addTab:hover {
+  color: var(--mc-text);
+}
+
+.hash {
+  color: var(--mc-text-muted);
+  font-weight: 400;
+  font-size: 0.78rem;
+}
+
+.membersBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: var(--mc-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  margin-right: 6px;
+  border-radius: var(--mc-radius);
+}
+
+.membersBtn:hover {
+  background: var(--mc-msg-hover);
+}
+
+.membersBtnActive {
+  color: var(--mc-accent);
+  background: var(--mc-msg-hover);
+}
+
 .videoSection {
   flex: none;
   min-height: 80px;

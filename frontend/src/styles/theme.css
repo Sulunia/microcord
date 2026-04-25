@@ -62,6 +62,8 @@
   --w7-sb-grad-h-2: #3a3a3a;
   --w7-sb-grad-a-1: #555;
   --w7-sb-grad-a-2: #444;
+
+  --w7-tab-bg: #2a2a2a;
 }
 
 [data-theme="dark"] .window {
@@ -104,7 +106,19 @@
 }
 
 [data-theme="dark"] menu[role="tablist"] :where(button) {
+  color: var(--mc-text-secondary);
+  background: linear-gradient(#252525, #1e1e1e);
+}
+
+[data-theme="dark"] menu[role="tablist"] button[aria-selected="true"] {
   color: var(--mc-text);
+  background: var(--w7-surface);
+  border-color: var(--w7-el-bd);
+}
+
+[data-theme="dark"] [role="tabpanel"] {
+  background: var(--w7-surface);
+  border-color: var(--w7-el-bd);
 }
 
 [data-theme="dark"] table {

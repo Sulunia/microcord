@@ -23,6 +23,7 @@ export function useChat(user) {
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [usersMap, setUsersMap] = useState({});
+  const [onlineUserIds, setOnlineUserIds] = useState(new Set());
   const loadingRef = useRef(false);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
@@ -118,6 +119,36 @@ export function useChat(user) {
             if (updatedUser?.id) {
               setUsersMap((prev) => ({ ...prev, [updatedUser.id]: updatedUser }));
             }
+          } else if (msg.type === 'presence_init') {
+            const ids = msg.data?.user_ids;
+            if (Array.isArray(ids)) {
+              setOnlineUserIds(new Set(ids));
+            }
+          } else if (msg.type === 'presence_online') {
+            const uid = msg.data?.user_id;
+            const onlineUser = msg.data?.user;
+            if (uid) {
+              setOnlineUserIds((prev) => {
+                const next = new Set(prev);
+                next.add(uid);
+                return next;
+              });
+              if (onlineUser?.id) {
+                setUsersMap((prev) => {
+                  if (prev[onlineUser.id]) return prev;
+                  return { ...prev, [onlineUser.id]: onlineUser };
+                });
+              }
+            }
+          } else if (msg.type === 'presence_offline') {
+            const uid = msg.data?.user_id;
+            if (uid) {
+              setOnlineUserIds((prev) => {
+                const next = new Set(prev);
+                next.delete(uid);
+                return next;
+              });
+            }
           }
         } catch { /* ignore malformed */ }
       };
@@ -199,5 +230,5 @@ export function useChat(user) {
     author: m.author || usersMap[m.author_id] || null,
   }));
 
-  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, ws: wsRef, usersMap };
+  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, ws: wsRef, usersMap, onlineUserIds };
 }

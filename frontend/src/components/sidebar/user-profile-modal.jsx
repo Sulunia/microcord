@@ -99,7 +99,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
     setAvatarError(null);
     setAvatarConverting(false);
     setSelectedTick(user?.tick_sound ?? 1);
-    navigator.mediaDevices.enumerateDevices().then((devices) => {
+    navigator.mediaDevices?.enumerateDevices()?.then((devices) => {
       setAudioDevices({
         inputs: devices.filter((d) => d.kind === 'audioinput'),
         outputs: devices.filter((d) => d.kind === 'audiooutput'),

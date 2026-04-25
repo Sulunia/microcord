@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.5.5**.
+Version **0.7.0**.
 
 ---
 
@@ -55,7 +55,7 @@ microcord/
 │   │   ├── chat.py             # list_messages, send_message, delete_message
 │   │   ├── config.py           # get_branding (app name, voice channel name)
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
-│   │   ├── users.py            # list_users, get_user, update_user
+│   │   ├── users.py            # list_users, get_user, update_user, get_online_users
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar
 │   ├── database/
@@ -70,20 +70,20 @@ microcord/
 │   │   └── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
 │   └── ws/
 │       ├── manager.py          # Per-user WebSocket map, broadcast, send_to
-│       └── handler.py          # WS endpoint: JWT auth, chat relay, voice + screenshare signaling
+│       └── handler.py          # WS endpoint: JWT auth, chat relay, voice + screenshare signaling, presence (online/offline)
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.js          # Preact preset, proxy to backend container
 │   ├── index.html
 │   └── src/
 │       ├── main.jsx            # Mount <App />, import global styles
-│       ├── app.jsx             # Shell: login vs main window, hook composition, resizable sidebar
+│       ├── app.jsx             # Shell: login vs main window, hook composition, resizable sidebar, toggleable members sidebar
 │       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
 │       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
 │       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
 │       ├── hooks/
 │       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
-│       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref
+│       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref, presence tracking (online user IDs)
 │       │   ├── use-voice.js    # Voice join/leave, mute toggle, VAD (AudioContext + AnalyserNode), WebRTC mesh for P2P audio, DOM-attached <audio> elements
 │       │   ├── use-screenshare.js  # WebRTC mesh, signaling over shared WS
 │       │   └── use-theme.js    # Light/dark theme toggle, persisted in localStorage
@@ -97,7 +97,8 @@ microcord/
 │       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
-│       │   │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split
+│       │   │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split, header bar with channel name and members toggle
+│       │   │   ├── members-sidebar.jsx     # Toggleable right sidebar: all users grouped by online/offline status with presence dots
 │       │   │   ├── message.jsx             # Single message: markdown (snarkdown + DOMPurify), images
 │       │   │   ├── message-input.jsx       # Compose bar with upload
 │       │   │   └── *.module.css
@@ -127,7 +128,8 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | POST | `/api/auth/logout` | `api.auth.logout` | Revoke current JWT (server-side logout) |
 | POST | `/api/auth/ws-ticket` | `api.auth.ws_ticket` | Issue one-time WebSocket ticket (requires JWT) |
 | GET | `/api/auth/me` | `api.auth.me` | Current user from JWT |
-| GET | `/api/users` | `api.users.list_users` | List all users |
+| GET | `/api/users` | `api.users.list_users` | List all users (includes `online` boolean) |
+| GET | `/api/users/online` | `api.users.get_online_users` | Get currently online user IDs (WebSocket-connected) |
 | GET | `/api/users/{id}` | `api.users.get_user` | Get user by ID |
 | PATCH | `/api/users/{id}` | `api.users.update_user` | Update own display_name (IDOR-protected) |
 | GET | `/api/messages` | `api.chat.list_messages` | Paginated history (`?limit=&cursor=`) |
@@ -170,6 +172,9 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `voice_signal` | Both | WebRTC signaling relay for voice (SDP offer/answer, ICE candidate) |
 | `voice_mute` | Both | User toggled mute state; payload `{ user_id, muted }` — server broadcasts to all clients |
 | `voice_speaking` | Both | Client-side VAD detected speaking state change; payload `{ user_id, speaking }` — server broadcasts to all clients (including sender) |
+| `presence_init` | Server → Client | Sent on WS connect; payload `{ user_ids }` — full list of currently online user IDs |
+| `presence_online` | Server → Client | User connected via WebSocket; payload `{ user_id, user }` — includes user object so new users appear in members list without re-fetch; broadcast to all other clients |
+| `presence_offline` | Server → Client | User disconnected from WebSocket; payload `{ user_id }` — broadcast to all clients |
 
 ---
 
@@ -320,6 +325,15 @@ Starlette is provided transitively through Connexion.
 5. All signaling (offers, answers, ICE candidates) relayed through backend WS.
 6. Media flows peer-to-peer (WebRTC). Backend never touches video/audio data.
 7. `screenshare_stop` on disconnect or explicit stop; backend clears sharer state.
+
+### Presence (online/offline)
+
+1. When a client's WebSocket connects, the server sends `presence_init` with `{ user_ids }` — the full list of currently connected user IDs — to that client only.
+2. The server broadcasts `presence_online` with `{ user_id }` to all other connected clients.
+3. When a client's WebSocket disconnects, the server broadcasts `presence_offline` with `{ user_id }` to all remaining connected clients.
+4. `use-chat.js` tracks `onlineUserIds` state from these events and exposes it to the UI.
+5. `MembersSidebar` displays all users from `usersMap`, grouped by online/offline, with green/gray status dots.
+6. `GET /api/users` now includes an `online` boolean per user; `GET /api/users/online` returns just the online user IDs.
 
 ---
 
