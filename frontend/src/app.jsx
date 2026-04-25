@@ -58,7 +58,7 @@ export function App() {
   const screenshare = useScreenshare(user, chat.ws, voice.participants, voice.isJoined);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [showHelp, setShowHelp] = useState(false);
-  const [showMembers, setShowMembers] = useState(false);
+  const [showMembers, setShowMembers] = useState(true);
   const dragging = useRef(false);
 
   const onMouseDown = useCallback((e) => {
