@@ -3,6 +3,7 @@ import styles from './sidebar.module.css';
 import { TICK_SOUNDS, APP_VERSION } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
 import { useTheme } from '../../hooks/use-theme.js';
+import { computeVadThreshold } from '../../hooks/use-voice.js';
 
 const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
 const AVATAR_ACCEPT = 'image/jpeg,image/png,image/avif';
@@ -24,6 +25,71 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
   const tickAudioRef = useRef(null);
+  const [micDetected, setMicDetected] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    let audioCtx = null;
+    let analyser = null;
+    let stream = null;
+    let rafId = null;
+    let speaking = false;
+    let lastChange = 0;
+
+    const start = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch { return; }
+      if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+
+      audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.3;
+      source.connect(analyser);
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const data = new Uint8Array(analyser.fftSize);
+
+      const tick = () => {
+        if (cancelled) return;
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+          const v = (data[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        const sensitivity = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50;
+        const threshold = computeVadThreshold(sensitivity);
+        const now = performance.now();
+        const loud = rms > threshold;
+        if (loud !== speaking) {
+          if (now - lastChange >= 90) {
+            speaking = loud;
+            lastChange = now;
+            setMicDetected(speaking);
+          }
+        } else {
+          lastChange = now;
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    };
+
+    start();
+
+    return () => {
+      cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (audioCtx) audioCtx.close().catch(() => {});
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      setMicDetected(false);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -194,7 +260,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
               </div>
             </div>
             <div class={styles.profileVadGroup}>
-              <label for="vad-sensitivity">Voice Activation Sensitivity: {vadSensitivity} {isSpeaking ? '🟢' : '🔴'}</label>
+              <label for="vad-sensitivity">Voice Activation Sensitivity: {vadSensitivity} {micDetected ? '🟢' : '🔴'}</label>
               <input
                 id="vad-sensitivity"
                 type="range"

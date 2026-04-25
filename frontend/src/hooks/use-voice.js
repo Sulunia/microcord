@@ -11,6 +11,11 @@ const DEFAULT_AUDIO_CONFIG = {
     opus_stereo: false,
 };
 
+export function computeVadThreshold(sensitivity) {
+    const s = Math.max(1, Math.min(100, sensitivity));
+    return Math.pow(10, -4 + (100 - s) / 100 * 3);
+}
+
 function ensureAudioPlay(audio) {
     const p = audio.play();
     if (!p) return;
@@ -126,7 +131,7 @@ export function useVoice(user, wsRef) {
             }
             const rms = Math.sqrt(sum / data.length);
             const sensitivity = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50;
-            const threshold = (100 - sensitivity) / 100 * 0.12 + 0.003;
+            const threshold = computeVadThreshold(sensitivity);
             const now = performance.now();
 
             if (rms > threshold !== vadSpeakingRef.current) {
