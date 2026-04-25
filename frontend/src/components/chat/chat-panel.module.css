@@ -7,6 +7,52 @@
   background: var(--mc-bg);
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--mc-border);
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.headerChannel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--mc-text);
+}
+
+.hash {
+  color: var(--mc-text-muted);
+  font-weight: 400;
+}
+
+.membersBtn {
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: var(--mc-radius);
+  color: var(--mc-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.membersBtn:hover {
+  background: var(--mc-msg-hover);
+  border-color: var(--mc-border);
+}
+
+.membersBtnActive {
+  color: var(--mc-accent);
+  background: var(--mc-msg-hover);
+}
+
 .videoSection {
   flex: none;
   min-height: 80px;

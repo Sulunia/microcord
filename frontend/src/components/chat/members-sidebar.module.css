@@ -1,0 +1,99 @@
+.sidebar {
+  width: 200px;
+  min-width: 200px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--mc-bg);
+  border-left: 1px solid var(--mc-border);
+}
+
+.scrollArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.group {
+  margin-bottom: 8px;
+}
+
+.groupHeader {
+  padding: 4px 12px 4px;
+  color: var(--mc-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  transition: background 0.12s;
+}
+
+.member:hover {
+  background: var(--mc-msg-hover);
+}
+
+.offline .memberName {
+  color: var(--mc-text-muted);
+}
+
+.offline .avatar {
+  opacity: 0.5;
+}
+
+.avatar {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--mc-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.statusDot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--mc-bg);
+}
+
+.statusOnline {
+  background: var(--mc-success);
+}
+
+.statusOffline {
+  background: var(--mc-text-muted);
+}
+
+.memberName {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--mc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

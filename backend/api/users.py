@@ -22,7 +22,12 @@ def _get_current_user_id() -> str | None:
 
 async def list_users() -> list[dict]:
     users = await repo.list_users()
-    return [u.to_dict() for u in users]
+    online_ids = set(ws_manager.connected_user_ids)
+    return [{**u.to_dict(), "online": u.id in online_ids} for u in users]
+
+
+async def get_online_users() -> dict:
+    return {"user_ids": ws_manager.connected_user_ids}
 
 
 async def get_user(user_id: str) -> ConnexionResponse:

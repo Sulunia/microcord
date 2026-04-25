@@ -13,6 +13,14 @@
   overflow: hidden;
 }
 
+.mainArea {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .resizeHandle {
   width: 4px;
   cursor: col-resize;
