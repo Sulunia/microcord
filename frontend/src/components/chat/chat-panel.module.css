@@ -31,6 +31,22 @@
   gap: 3px;
 }
 
+.addTab {
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 4px;
+  color: var(--mc-text-muted);
+  cursor: pointer;
+}
+
+.addTab:hover {
+  color: var(--mc-accent);
+}
+
 .hash {
   color: var(--mc-text-muted);
   font-weight: 400;
