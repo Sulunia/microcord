@@ -7,7 +7,7 @@ import { useTheme } from '../../hooks/use-theme.js';
 const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
 const AVATAR_ACCEPT = 'image/jpeg,image/png,image/avif';
 
-export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar, onLogout }) {
+export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, onUploadAvatar, onLogout }) {
   const [displayName, setDisplayName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -20,6 +20,7 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
   const [selectedInput, setSelectedInput] = useState(() => localStorage.getItem('mc-audio-input') || '');
   const [selectedOutput, setSelectedOutput] = useState(() => localStorage.getItem('mc-audio-output') || '');
   const [selectedTick, setSelectedTick] = useState(1);
+  const [vadSensitivity, setVadSensitivity] = useState(() => parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 10);
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
   const tickAudioRef = useRef(null);
@@ -154,41 +155,59 @@ export function UserProfileModal({ isOpen, user, onClose, onSave, onUploadAvatar
                 required
               />
             </div>
-            <div class={styles.profileDeviceGroup}>
-              <label for="audio-input">Microphone</label>
-              <select
-                id="audio-input"
-                value={selectedInput}
-                onChange={(e) => {
-                  setSelectedInput(e.target.value);
-                  localStorage.setItem('mc-audio-input', e.target.value);
-                }}
-              >
-                <option value="">Default</option>
-                {audioDevices.inputs.map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || `Microphone (${d.deviceId.slice(0, 8)})`}
-                  </option>
-                ))}
-              </select>
+            <div class={styles.profileDeviceRow}>
+              <div class={styles.profileDeviceGroup}>
+                <label for="audio-input">Microphone</label>
+                <select
+                  id="audio-input"
+                  value={selectedInput}
+                  onChange={(e) => {
+                    setSelectedInput(e.target.value);
+                    localStorage.setItem('mc-audio-input', e.target.value);
+                  }}
+                >
+                  <option value="">Default</option>
+                  {audioDevices.inputs.map((d) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.label || `Microphone (${d.deviceId.slice(0, 8)})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div class={styles.profileDeviceGroup}>
+                <label for="audio-output">Speaker</label>
+                <select
+                  id="audio-output"
+                  value={selectedOutput}
+                  onChange={(e) => {
+                    setSelectedOutput(e.target.value);
+                    localStorage.setItem('mc-audio-output', e.target.value);
+                  }}
+                >
+                  <option value="">Default</option>
+                  {audioDevices.outputs.map((d) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.label || `Speaker (${d.deviceId.slice(0, 8)})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div class={styles.profileDeviceGroup}>
-              <label for="audio-output">Speaker</label>
-              <select
-                id="audio-output"
-                value={selectedOutput}
-                onChange={(e) => {
-                  setSelectedOutput(e.target.value);
-                  localStorage.setItem('mc-audio-output', e.target.value);
+            <div class={styles.profileVadGroup}>
+              <label for="vad-sensitivity">Voice Activation Sensitivity: {vadSensitivity} {isSpeaking ? '🟢' : '🔴'}</label>
+              <input
+                id="vad-sensitivity"
+                type="range"
+                min="1"
+                max="100"
+                step="1"
+                value={vadSensitivity}
+                onInput={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  setVadSensitivity(val);
+                  localStorage.setItem('mc-vad-sensitivity', String(val));
                 }}
-              >
-                <option value="">Default</option>
-                {audioDevices.outputs.map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || `Speaker (${d.deviceId.slice(0, 8)})`}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div class={styles.profileTickGroup}>
               <label>Message Tick Sound</label>

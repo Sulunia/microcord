@@ -169,6 +169,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `screenshare_error` | Server → Client | Sharing rejected (e.g. someone already sharing) |
 | `voice_signal` | Both | WebRTC signaling relay for voice (SDP offer/answer, ICE candidate) |
 | `voice_mute` | Both | User toggled mute state; payload `{ user_id, muted }` — server broadcasts to all clients |
+| `voice_speaking` | Both | Client-side VAD detected speaking state change; payload `{ user_id, speaking }` — server broadcasts to all clients (including sender) |
 
 ---
 
@@ -307,7 +308,8 @@ Starlette is provided transitively through Connexion.
 7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
 8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
 9. Mute toggle sets `track.enabled` on all local audio tracks and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
-10. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
+10. Client-side VAD uses `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a configurable sensitivity threshold (persisted in localStorage `mc-vad-sensitivity`). When speaking state changes (with 90ms debounce), `voice_speaking` is sent over WS; server broadcasts to all clients. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal (range 1–100, default 10). Speaking state resets on voice leave.
+11. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
 
 ### Screen sharing
 

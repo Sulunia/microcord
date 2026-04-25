@@ -63,6 +63,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     await _handle_voice_signal(user_id, msg.get("data", {}))
                 case "voice_mute":
                     await _handle_voice_mute(user_id, msg.get("data", {}))
+                case "voice_speaking":
+                    await _handle_voice_speaking(user_id, msg.get("data", {}))
                 case _:
                     pass
 
@@ -154,4 +156,14 @@ async def _handle_voice_mute(user_id: str, data: dict):
     voice_room.set_mute(user_id, muted)
     await ws_manager.broadcast(
         {"type": "voice_mute", "data": {"user_id": user_id, "muted": muted}},
+    )
+
+
+async def _handle_voice_speaking(user_id: str, data: dict):
+    if not voice_room.is_joined(user_id):
+        return
+    speaking = bool(data.get("speaking", False))
+    voice_room.set_speaking(user_id, speaking)
+    await ws_manager.broadcast(
+        {"type": "voice_speaking", "data": {"user_id": user_id, "speaking": speaking}},
     )

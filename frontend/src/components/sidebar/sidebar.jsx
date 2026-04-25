@@ -29,7 +29,7 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch,
 }
 
 export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style }) {
-  const { participants, isJoined, isMuted, join, leave, toggleMute } = voice;
+  const { participants, isJoined, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const prevIdsRef = useRef(new Set());
@@ -85,7 +85,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
                 key={pid}
                 name={p.name}
                 avatarUrl={p.avatar_url}
-                isSpeaking={p.isSpeaking}
+                isSpeaking={speakingUsers.get(pid) ?? Boolean(p.speaking)}
                 isSharer={isSharer}
                 isMuted={participantMuted}
                 canWatch={canWatch}
@@ -157,6 +157,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
       <UserProfileModal
         isOpen={isProfileOpen}
         user={user}
+        isSpeaking={isSpeaking && isJoined}
         onClose={() => setIsProfileOpen(false)}
         onSave={onUpdateProfile || (() => false)}
         onUploadAvatar={onUploadAvatar}

@@ -58,6 +58,8 @@ export function useVoice(user, wsRef) {
     const [participants, setParticipants] = useState([]);
     const [isJoined, setIsJoined] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
+    const [speakingUsers, setSpeakingUsers] = useState(new Map());
+    const [isSpeaking, setIsSpeaking] = useState(false);
     const streamRef = useRef(null);
     const peerConnectionsRef = useRef(new Map());
     const audioElementsRef = useRef(new Map());
@@ -65,6 +67,12 @@ export function useVoice(user, wsRef) {
     const audioConfigRef = useRef(DEFAULT_AUDIO_CONFIG);
     const userRef = useRef(user);
     const isJoinedRef = useRef(false);
+    const vadAudioCtxRef = useRef(null);
+    const vadAnalyserRef = useRef(null);
+    const vadRafRef = useRef(null);
+    const vadSensitivityRef = useRef(parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 10);
+    const vadSpeakingRef = useRef(false);
+    const vadLastChangeRef = useRef(0);
 
     useEffect(() => { userRef.current = user; }, [user]);
     useEffect(() => { isJoinedRef.current = isJoined; }, [isJoined]);
@@ -77,6 +85,79 @@ export function useVoice(user, wsRef) {
             audioConfigRef.current = LIVE_MEDIA_CONFIG.audio;
         });
     }, []);
+
+    useEffect(() => {
+        const handler = () => {
+            vadSensitivityRef.current = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 10;
+        };
+        window.addEventListener('storage', handler);
+        return () => window.removeEventListener('storage', handler);
+    }, []);
+
+    const stopVad = useCallback(() => {
+        if (vadRafRef.current) {
+            cancelAnimationFrame(vadRafRef.current);
+            vadRafRef.current = null;
+        }
+        if (vadAudioCtxRef.current) {
+            vadAudioCtxRef.current.close().catch(() => {});
+            vadAudioCtxRef.current = null;
+        }
+        vadAnalyserRef.current = null;
+        vadSpeakingRef.current = false;
+    }, []);
+
+    const startVad = useCallback(() => {
+        stopVad();
+        const stream = streamRef.current;
+        if (!stream) return;
+
+        const audioCtx = new AudioContext();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+
+        vadAudioCtxRef.current = audioCtx;
+        vadAnalyserRef.current = analyser;
+
+        const data = new Uint8Array(analyser.fftSize);
+        const DEBOUNCE_MS = 90;
+
+        const tick = () => {
+            analyser.getByteTimeDomainData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) {
+                const v = (data[i] - 128) / 128;
+                sum += v * v;
+            }
+            const rms = Math.sqrt(sum / data.length);
+            const sensitivity = vadSensitivityRef.current;
+            const threshold = (101 - sensitivity) / 100 * 0.5;
+            const now = performance.now();
+
+            if (rms > threshold !== vadSpeakingRef.current) {
+                if (now - vadLastChangeRef.current >= DEBOUNCE_MS) {
+                    vadSpeakingRef.current = !vadSpeakingRef.current;
+                    vadLastChangeRef.current = now;
+                    setIsSpeaking(vadSpeakingRef.current);
+                    const ws = wsRef?.current;
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'voice_speaking',
+                            data: { speaking: vadSpeakingRef.current },
+                        }));
+                    }
+                }
+            } else {
+                vadLastChangeRef.current = now;
+            }
+
+            vadRafRef.current = requestAnimationFrame(tick);
+        };
+
+        vadRafRef.current = requestAnimationFrame(tick);
+    }, [wsRef, stopVad]);
 
     const fetchParticipants = useCallback(async () => {
         try {
@@ -222,6 +303,15 @@ export function useVoice(user, wsRef) {
                     );
                     break;
                 }
+                case 'voice_speaking': {
+                    const { user_id: speakUid, speaking } = msg.data;
+                    setSpeakingUsers((prev) => {
+                        const next = new Map(prev);
+                        next.set(speakUid, speaking);
+                        return next;
+                    });
+                    break;
+                }
                 case 'screenshare_start':
                 case 'screenshare_stop':
                 case 'user_updated':
@@ -246,11 +336,14 @@ export function useVoice(user, wsRef) {
     }, []);
 
     const cleanup = useCallback(() => {
+        stopVad();
         cleanupPeerConnections();
         streamRef.current?.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
         setIsMuted(false);
-    }, [cleanupPeerConnections]);
+        setIsSpeaking(false);
+        setSpeakingUsers(new Map());
+    }, [cleanupPeerConnections, stopVad]);
 
     useEffect(() => cleanup, [cleanup]);
 
@@ -288,6 +381,8 @@ export function useVoice(user, wsRef) {
             setParticipants(pList);
             setIsJoined(true);
 
+            startVad();
+
             for (const p of pList) {
                 const pid = p.user_id || p.id;
                 if (pid === u.id) continue;
@@ -297,7 +392,7 @@ export function useVoice(user, wsRef) {
             console.error('Voice join error:', err);
             cleanup();
         }
-    }, [isJoined, cleanup, sendOffer]);
+    }, [isJoined, cleanup, sendOffer, startVad]);
 
     const leave = useCallback(async () => {
         const u = userRef.current;
@@ -341,5 +436,5 @@ export function useVoice(user, wsRef) {
         }
     }, []);
 
-    return { participants, isJoined, isMuted, join, leave, toggleMute, setVolume, fetchParticipants };
+    return { participants, isJoined, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, setVolume, fetchParticipants };
 }
