@@ -272,7 +272,7 @@ export function useVoice(user, wsRef) {
                 case 'voice_participant_joined':
                     if (isJoinedRef.current) {
                         const enterAudio = new Audio('/sounds/EnterVoice.wav');
-                        enterAudio.volume = 0.6;
+                        enterAudio.volume = 0.7;
                         enterAudio.play().catch(() => {});
                     }
                     fetchParticipants();
@@ -280,7 +280,7 @@ export function useVoice(user, wsRef) {
                 case 'voice_participant_left': {
                     if (isJoinedRef.current) {
                         const exitAudio = new Audio('/sounds/ExitVoice.wav');
-                        exitAudio.volume = 0.8;
+                        exitAudio.volume = 0.55;
                         exitAudio.play().catch(() => {});
                     }
                     const pid = msg.data.user_id;
