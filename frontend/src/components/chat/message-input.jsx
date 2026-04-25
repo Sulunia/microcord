@@ -29,14 +29,19 @@ export function MessageInput({ onSend }) {
   }, []);
 
   useEffect(() => {
+    const isExternalFileDrop = (e) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return false;
+      if (e.dataTransfer.types.includes('text/uri-list') || e.dataTransfer.types.includes('text/html')) return false;
+      return true;
+    };
     const onDragEnter = (e) => {
-      if (!e.dataTransfer?.types?.includes('Files')) return;
+      if (!isExternalFileDrop(e)) return;
       e.preventDefault();
       dragCounterRef.current++;
       setIsDragging(true);
     };
     const onDragOver = (e) => {
-      if (!e.dataTransfer?.types?.includes('Files')) return;
+      if (!isExternalFileDrop(e)) return;
       e.preventDefault();
     };
     const onDragLeave = (e) => {
@@ -51,6 +56,7 @@ export function MessageInput({ onSend }) {
       e.preventDefault();
       dragCounterRef.current = 0;
       setIsDragging(false);
+      if (!isExternalFileDrop(e)) return;
       const file = e.dataTransfer?.files?.[0];
       if (file) processFile(file);
     };

@@ -13,6 +13,7 @@ class VoiceRoom:
     def __init__(self):
         self._participants: set[str] = set()
         self._muted: set[str] = set()
+        self._speaking: set[str] = set()
         self._sharer: str | None = None
 
     @property
@@ -29,6 +30,9 @@ class VoiceRoom:
     def is_muted(self, user_id: str) -> bool:
         return user_id in self._muted
 
+    def is_speaking(self, user_id: str) -> bool:
+        return user_id in self._speaking
+
     def set_mute(self, user_id: str, muted: bool) -> None:
         if not self.is_joined(user_id):
             return
@@ -37,9 +41,18 @@ class VoiceRoom:
         else:
             self._muted.discard(user_id)
 
+    def set_speaking(self, user_id: str, speaking: bool) -> None:
+        if not self.is_joined(user_id):
+            return
+        if speaking:
+            self._speaking.add(user_id)
+        else:
+            self._speaking.discard(user_id)
+
     def join(self, user_id: str) -> None:
         self._participants.add(user_id)
         self._muted.discard(user_id)
+        self._speaking.discard(user_id)
         logger.info(f"Voice joined: {user_id}, total: {len(self._participants)}")
 
     def leave(self, user_id: str) -> bool:
@@ -48,6 +61,7 @@ class VoiceRoom:
             return False
         self._participants.discard(user_id)
         self._muted.discard(user_id)
+        self._speaking.discard(user_id)
         if self._sharer == user_id:
             self._sharer = None
         logger.info(f"Voice left: {user_id}, total: {len(self._participants)}")

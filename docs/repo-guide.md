@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.5.4**.
+Version **0.5.5**.
 
 ---
 
@@ -66,7 +66,7 @@ microcord/
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
 │   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling)
-│   │   ├── voice_room.py       # In-memory voice participants, per-user mute state, single-sharer tracking
+│   │   ├── voice_room.py       # In-memory voice participants, per-user mute/speaking state, single-sharer tracking
 │   │   └── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
 │   └── ws/
 │       ├── manager.py          # Per-user WebSocket map, broadcast, send_to
@@ -84,7 +84,7 @@ microcord/
 │       ├── hooks/
 │       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
 │       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref
-│       │   ├── use-voice.js    # Voice join/leave, mute toggle, WebRTC mesh for P2P audio, DOM-attached <audio> elements
+│       │   ├── use-voice.js    # Voice join/leave, mute toggle, VAD (AudioContext + AnalyserNode), WebRTC mesh for P2P audio, DOM-attached <audio> elements
 │       │   ├── use-screenshare.js  # WebRTC mesh, signaling over shared WS
 │       │   └── use-theme.js    # Light/dark theme toggle, persisted in localStorage
 │       ├── components/
@@ -93,8 +93,8 @@ microcord/
 │       │   ├── alert-modal.jsx
 │       │   ├── alert-modal.module.css
 │       │   ├── sidebar/
-│       │   │   ├── sidebar.jsx             # Voice channel, participant list, screenshare controls
-│       │   │   ├── user-profile-modal.jsx
+│       │   │   ├── sidebar.jsx             # Voice channel, participant list, VAD speaking indicator, screenshare controls
+│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
 │       │   │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split
@@ -137,7 +137,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | POST | `/api/avatar` | `api.upload.upload_avatar` | Upload avatar (max 1 MB, JPEG/PNG/AVIF). Rate limited: 5/min/user |
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
 | POST | `/api/voice/leave` | `api.voice.leave_voice` | Leave voice channel |
-| GET | `/api/voice/participants` | `api.voice.get_participants` | Current voice participants (includes `sharing` and `muted` flags) |
+| GET | `/api/voice/participants` | `api.voice.get_participants` | Current voice participants (includes `sharing`, `muted`, and `speaking` flags) |
 | WS | `/ws?ticket=<ticket>` | `ws.handler.websocket_endpoint` | Real-time events, voice + screenshare signaling. Max message size: 64 KB |
 
 > *(removed 2026-04-24)* `GET /api/voice/config` — superseded by `GET /api/livemediaconfig`
@@ -169,6 +169,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `screenshare_error` | Server → Client | Sharing rejected (e.g. someone already sharing) |
 | `voice_signal` | Both | WebRTC signaling relay for voice (SDP offer/answer, ICE candidate) |
 | `voice_mute` | Both | User toggled mute state; payload `{ user_id, muted }` — server broadcasts to all clients |
+| `voice_speaking` | Both | Client-side VAD detected speaking state change; payload `{ user_id, speaking }` — server broadcasts to all clients (including sender) |
 
 ---
 
@@ -307,7 +308,8 @@ Starlette is provided transitively through Connexion.
 7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
 8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
 9. Mute toggle sets `track.enabled` on all local audio tracks and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
-10. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
+10. Client-side VAD uses `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`) persisted in localStorage `mc-vad-sensitivity` (range 1–100, default 50, higher = more sensitive). When speaking state changes (with 90ms debounce), `voice_speaking` is sent over WS; server broadcasts to all clients. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own lightweight mic analyser to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
+11. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
 
 ### Screen sharing
 
