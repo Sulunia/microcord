@@ -106,10 +106,12 @@
 }
 
 [data-theme="dark"] menu[role="tablist"] :where(button) {
-  color: var(--mc-text);
+  color: var(--mc-text-secondary);
+  background: linear-gradient(#252525, #1e1e1e);
 }
 
 [data-theme="dark"] menu[role="tablist"] button[aria-selected="true"] {
+  color: var(--mc-text);
   background: var(--w7-surface);
   border-color: var(--w7-el-bd);
 }
