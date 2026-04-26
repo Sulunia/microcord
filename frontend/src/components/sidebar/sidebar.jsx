@@ -170,25 +170,25 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
               <span class={styles.profileSubtext}>Click to edit display name</span>
             </span>
           </button>
-          {isJoined && (
-            <>
-              <button
-                class={`${styles.controlBtn} ${isMuted ? styles.controlBtnActive : ''}`}
-                onClick={toggleMute}
-                title={isMuted ? 'Unmute' : 'Mute'}
-              >
-                {isMuted ? <IconMicOff /> : <IconMicOn />}
-              </button>
-              <button
-                class={`${styles.controlBtn} ${isDeafened ? styles.controlBtnActive : ''}`}
-                onClick={toggleDeafen}
-                title={isDeafened ? 'Undeafen' : 'Deafen'}
-              >
-                {isDeafened ? <IconHeadphonesOff /> : <IconHeadphonesOn />}
-              </button>
-            </>
-          )}
         </div>
+        {isJoined && (
+          <div class={styles.controlRow}>
+            <button
+              class={`${styles.controlBtn} ${isMuted ? styles.controlBtnActive : ''}`}
+              onClick={toggleMute}
+              title={isMuted ? 'Unmute' : 'Mute'}
+            >
+              {isMuted ? <IconMicOff /> : <IconMicOn />}
+            </button>
+            <button
+              class={`${styles.controlBtn} ${isDeafened ? styles.controlBtnActive : ''}`}
+              onClick={toggleDeafen}
+              title={isDeafened ? 'Undeafen' : 'Deafen'}
+            >
+              {isDeafened ? <IconHeadphonesOff /> : <IconHeadphonesOn />}
+            </button>
+          </div>
+        )}
         <button
           class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
           onClick={isJoined ? leave : join}

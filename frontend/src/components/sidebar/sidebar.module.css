@@ -50,7 +50,7 @@
 
 .participantList {
   list-style: none;
-  padding: 2px 6px;
+  padding: 6px;
   margin: 0 8px 8px;
   border: 1px solid var(--mc-border);
   border-radius: var(--mc-radius);
@@ -458,9 +458,13 @@
   align-items: stretch;
 }
 
+.controlRow {
+  display: flex;
+  gap: 4px;
+}
+
 .controlBtn {
-  flex-shrink: 0;
-  width: 36px;
+  flex: 1;
   height: 36px;
   display: flex;
   align-items: center;
