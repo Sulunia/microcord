@@ -3,33 +3,80 @@ import { UI_CONFIG } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
 
-function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch, onWatch, isNew }) {
-  const initial = name.charAt(0).toUpperCase();
-  return (
-    <li class={`${styles.participant} ${isSpeaking ? styles.speaking : ''} ${isNew ? styles.participantNew : ''}`}>
-      <span class={styles.participantAvatar}>
-        {avatarUrl
-          ? <img src={avatarUrl} alt={name} class={styles.participantAvatarImg} />
-          : initial}
-      </span>
-      <span class={styles.participantName}>
-        {name}
-        {isSharer && <span class={styles.sharingBadge}>sharing</span>}
-      </span>
-      {isMuted && (
-        <span class={styles.mutedIcon} title="Muted">🔇</span>
-      )}
-      {canWatch && (
-        <button class={styles.watchBtn} onClick={onWatch} title="Watch stream">
-          ▶
-        </button>
-      )}
-    </li>
-  );
+function IconMicOn() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="22" />
+        </svg>
+    );
+}
+
+function IconMicOff() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="2" y1="2" x2="22" y2="22" />
+            <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2" />
+            <path d="M5 10v2a7 7 0 0 0 12 5" />
+            <path d="M9 4.73A3 3 0 0 1 15 5v6.27" />
+            <line x1="12" y1="19" x2="12" y2="22" />
+        </svg>
+    );
+}
+
+function IconHeadphonesOn() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 14v-3a9 9 0 0 1 18 0v3" />
+            <path d="M21 14a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 14a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+        </svg>
+    );
+}
+
+function IconHeadphonesOff() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="2" y1="2" x2="22" y2="22" />
+            <path d="M3 14v-3a9 9 0 0 1 15.4-6.4" />
+            <path d="M21 14v1.5" />
+            <path d="M21 14a2 2 0 0 0-2-2h-1a2 2 0 0 0-2 2v.5" />
+            <path d="M3 14a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <path d="M15.5 19.5a2 2 0 0 1-2-2v-1" />
+        </svg>
+    );
+}
+
+function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, isDeafened, canWatch, onWatch, isNew }) {
+    const initial = name.charAt(0).toUpperCase();
+    return (
+        <li class={`${styles.participant} ${isSpeaking && !isMuted ? styles.speaking : ''} ${isNew ? styles.participantNew : ''}`}>
+            <span class={styles.participantAvatar}>
+                {avatarUrl
+                    ? <img src={avatarUrl} alt={name} class={styles.participantAvatarImg} />
+                    : initial}
+            </span>
+            <span class={styles.participantName}>
+                {name}
+                {isSharer && <span class={styles.sharingBadge}>sharing</span>}
+            </span>
+            {isDeafened && (
+                <span class={styles.statusIcon} title="Deafened"><IconHeadphonesOff /></span>
+            )}
+            {!isDeafened && isMuted && (
+                <span class={styles.statusIcon} title="Muted"><IconMicOff /></span>
+            )}
+            {canWatch && (
+                <button class={styles.watchBtn} onClick={onWatch} title="Watch stream">
+                    ▶
+                </button>
+            )}
+        </li>
+    );
 }
 
 export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style }) {
-  const { participants, isJoined, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute } = voice;
+    const { participants, isJoined, isMuted, isDeafened, isSpeaking, speakingUsers, join, leave, toggleMute, toggleDeafen } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const prevIdsRef = useRef(new Set());
@@ -80,6 +127,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             const isMe = pid === user?.id;
             const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
             const participantMuted = Boolean(p.muted);
+            const participantDeafened = Boolean(p.deafened);
             return (
               <Participant
                 key={pid}
@@ -88,6 +136,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
                 isSpeaking={speakingUsers.get(pid) ?? Boolean(p.speaking)}
                 isSharer={isSharer}
                 isMuted={participantMuted}
+                isDeafened={participantDeafened}
                 canWatch={canWatch}
                 onWatch={screenshare?.requestStream}
                 isNew={newIds.has(pid)}
@@ -122,13 +171,22 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             </span>
           </button>
           {isJoined && (
-            <button
-              class={`${styles.muteBtn} ${isMuted ? styles.muteBtnActive : ''}`}
-              onClick={toggleMute}
-              title={isMuted ? 'Unmute' : 'Mute'}
-            >
-              {isMuted ? '🔇' : '🎤'}
-            </button>
+            <>
+              <button
+                class={`${styles.controlBtn} ${isMuted ? styles.controlBtnActive : ''}`}
+                onClick={toggleMute}
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? <IconMicOff /> : <IconMicOn />}
+              </button>
+              <button
+                class={`${styles.controlBtn} ${isDeafened ? styles.controlBtnActive : ''}`}
+                onClick={toggleDeafen}
+                title={isDeafened ? 'Undeafen' : 'Deafen'}
+              >
+                {isDeafened ? <IconHeadphonesOff /> : <IconHeadphonesOn />}
+              </button>
+            </>
           )}
         </div>
         <button

@@ -458,9 +458,10 @@
   align-items: stretch;
 }
 
-.muteBtn {
+.controlBtn {
   flex-shrink: 0;
-  width: 42px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -468,26 +469,34 @@
   background: var(--mc-bg);
   border: 1px solid var(--mc-border);
   border-radius: var(--mc-radius);
-  font-size: 1rem;
   padding: 0;
+  color: var(--mc-text);
 }
 
-.muteBtn:hover {
+.controlBtn:hover {
   background: var(--mc-msg-hover);
 }
 
-.muteBtnActive {
+.controlBtnActive {
   background: var(--mc-danger);
   border-color: var(--mc-danger);
+  color: #fff;
   opacity: 0.85;
 }
 
-.muteBtnActive:hover {
+.controlBtnActive:hover {
   opacity: 1;
 }
 
-.mutedIcon {
+.statusIcon {
   flex-shrink: 0;
-  font-size: 0.72rem;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  color: var(--mc-danger);
+  opacity: 0.85;
+}
+
+.statusIcon svg {
+  width: 14px;
+  height: 14px;
 }

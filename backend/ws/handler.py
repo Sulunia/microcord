@@ -77,6 +77,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     await _handle_voice_signal(user_id, msg.get("data", {}))
                 case "voice_mute":
                     await _handle_voice_mute(user_id, msg.get("data", {}))
+                case "voice_deafen":
+                    await _handle_voice_deafen(user_id, msg.get("data", {}))
                 case "voice_speaking":
                     await _handle_voice_speaking(user_id, msg.get("data", {}))
                 case _:
@@ -174,6 +176,20 @@ async def _handle_voice_mute(user_id: str, data: dict):
     await ws_manager.broadcast(
         {"type": "voice_mute", "data": {"user_id": user_id, "muted": muted}},
     )
+
+
+async def _handle_voice_deafen(user_id: str, data: dict):
+    if not voice_room.is_joined(user_id):
+        return
+    deafened = bool(data.get("deafened", False))
+    voice_room.set_deafen(user_id, deafened)
+    await ws_manager.broadcast(
+        {"type": "voice_deafen", "data": {"user_id": user_id, "deafened": deafened}},
+    )
+    if deafened:
+        await ws_manager.broadcast(
+            {"type": "voice_mute", "data": {"user_id": user_id, "muted": True}},
+        )
 
 
 async def _handle_voice_speaking(user_id: str, data: dict):
