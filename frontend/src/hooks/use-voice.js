@@ -78,14 +78,9 @@ export function useVoice(user, wsRef) {
     const vadRafRef = useRef(null);
     const vadSpeakingRef = useRef(false);
     const vadLastChangeRef = useRef(0);
-    const preDeafenMuteRef = useRef(false);
-    const isDeafenedRef = useRef(false);
-    const isMutedRef = useRef(false);
 
     useEffect(() => { userRef.current = user; }, [user]);
     useEffect(() => { isJoinedRef.current = isJoined; }, [isJoined]);
-    useEffect(() => { isDeafenedRef.current = isDeafened; }, [isDeafened]);
-    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
     const userId = user?.id;
 
@@ -331,25 +326,15 @@ export function useVoice(user, wsRef) {
                     if (deafUid === userRef.current?.id) {
                         setIsDeafened(deafened);
                         if (deafened) {
-                            preDeafenMuteRef.current = isMuted;
                             setIsMuted(true);
                             const stream = streamRef.current;
                             if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = false; });
                             audioElementsRef.current.forEach((entry) => { entry.audio.volume = 0; });
                         } else {
-                            const wasMuted = preDeafenMuteRef.current;
-                            setIsMuted(wasMuted);
+                            setIsMuted(false);
                             const stream = streamRef.current;
-                            if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = !wasMuted; });
+                            if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = true; });
                             audioElementsRef.current.forEach((entry) => { entry.audio.volume = entry.volume; });
-                        }
-                    } else {
-                        if (deafened) {
-                            const entry = audioElementsRef.current.get(deafUid);
-                            if (entry) entry.audio.volume = 0;
-                        } else {
-                            const entry = audioElementsRef.current.get(deafUid);
-                            if (entry) entry.audio.volume = entry.volume;
                         }
                     }
                     break;
@@ -463,34 +448,32 @@ export function useVoice(user, wsRef) {
     }, [fetchParticipants, cleanup]);
 
     const toggleDeafen = useCallback(() => {
-        const becomingDeafened = !isDeafenedRef.current;
-        if (becomingDeafened) {
-            preDeafenMuteRef.current = isMutedRef.current;
-        }
-        setIsDeafened(becomingDeafened);
-        if (becomingDeafened) {
-            setIsMuted(true);
-            const stream = streamRef.current;
-            if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = false; });
-            audioElementsRef.current.forEach((entry) => { entry.audio.volume = 0; });
-        } else {
-            const wasMuted = preDeafenMuteRef.current;
-            setIsMuted(wasMuted);
-            const stream = streamRef.current;
-            if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = !wasMuted; });
-            audioElementsRef.current.forEach((entry) => { entry.audio.volume = entry.volume; });
-        }
-        const ws = wsRef?.current;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'voice_deafen',
-                data: { deafened: becomingDeafened },
-            }));
-        }
+        setIsDeafened((prev) => {
+            const next = !prev;
+            if (next) {
+                setIsMuted(true);
+                const stream = streamRef.current;
+                if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = false; });
+                audioElementsRef.current.forEach((entry) => { entry.audio.volume = 0; });
+            } else {
+                setIsMuted(false);
+                const stream = streamRef.current;
+                if (stream) stream.getAudioTracks().forEach((t) => { t.enabled = true; });
+                audioElementsRef.current.forEach((entry) => { entry.audio.volume = entry.volume; });
+            }
+            const ws = wsRef?.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'voice_deafen',
+                    data: { deafened: next },
+                }));
+            }
+            return next;
+        });
     }, [wsRef]);
 
     const toggleMute = useCallback(() => {
-        if (isDeafenedRef.current) {
+        if (isDeafened) {
             toggleDeafen();
             return;
         }
@@ -509,7 +492,7 @@ export function useVoice(user, wsRef) {
             }
             return next;
         });
-    }, [wsRef, toggleDeafen]);
+    }, [wsRef, isDeafened, toggleDeafen]);
 
     const setVolume = useCallback((uid, volume) => {
         const entry = audioElementsRef.current.get(uid);

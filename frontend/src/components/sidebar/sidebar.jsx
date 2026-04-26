@@ -29,7 +29,8 @@ function IconHeadphonesOn() {
     return (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 14v-3a9 9 0 0 1 18 0v3" />
-            <path d="M21 14a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 14a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+            <path d="M3 18v-1a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h0a2 2 0 0 1-2-2z" />
+            <path d="M17 18v-1a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h0a2 2 0 0 1-2-2z" />
         </svg>
     );
 }
@@ -176,9 +177,9 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             <button
               class={`${styles.controlBtn} ${isMuted ? styles.controlBtnActive : ''}`}
               onClick={toggleMute}
-              title={isMuted ? 'Unmute' : 'Mute'}
+              title={isDeafened ? 'Undeafen' : isMuted ? 'Unmute' : 'Mute'}
             >
-              {isMuted ? <IconMicOff /> : <IconMicOn />}
+              {isDeafened ? <IconMicOff /> : isMuted ? <IconMicOff /> : <IconMicOn />}
             </button>
             <button
               class={`${styles.controlBtn} ${isDeafened ? styles.controlBtnActive : ''}`}
@@ -189,12 +190,6 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             </button>
           </div>
         )}
-        <button
-          class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
-          onClick={isJoined ? leave : join}
-        >
-          {isJoined ? 'Disconnect' : 'Join Voice'}
-        </button>
         {isJoined && (
           <button
             class={`${styles.shareBtn} ${screenshare?.isSharing ? styles.shareBtnActive : ''}`}
@@ -211,6 +206,12 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             {screenshare?.isSharing ? 'Stop Sharing' : 'Share Screen'}
           </button>
         )}
+        <button
+          class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
+          onClick={isJoined ? leave : join}
+        >
+          {isJoined ? 'Disconnect' : 'Join Voice'}
+        </button>
       </div>
       <UserProfileModal
         isOpen={isProfileOpen}
