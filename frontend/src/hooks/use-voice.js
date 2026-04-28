@@ -67,6 +67,7 @@ export function useVoice(user, wsRef) {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const streamRef = useRef(null);
     const peerConnectionsRef = useRef(new Map());
+    const audioSendersRef = useRef(new Map());
     const audioElementsRef = useRef(new Map());
     const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
     const audioConfigRef = useRef(DEFAULT_AUDIO_CONFIG);
@@ -77,9 +78,18 @@ export function useVoice(user, wsRef) {
     const vadRafRef = useRef(null);
     const vadSpeakingRef = useRef(false);
     const vadLastChangeRef = useRef(0);
+    const isMutedRef = useRef(false);
 
     useEffect(() => { userRef.current = user; }, [user]);
     useEffect(() => { isJoinedRef.current = isJoined; }, [isJoined]);
+    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
+    const gateAudioToPeers = useCallback((enabled) => {
+        const audioTrack = streamRef.current?.getAudioTracks()[0];
+        audioSendersRef.current.forEach((sender) => {
+            sender.replaceTrack(enabled ? audioTrack : null).catch(() => {});
+        });
+    }, []);
 
     const userId = user?.id;
 
@@ -139,6 +149,7 @@ export function useVoice(user, wsRef) {
                     vadSpeakingRef.current = !vadSpeakingRef.current;
                     vadLastChangeRef.current = now;
                     setIsSpeaking(vadSpeakingRef.current);
+                    gateAudioToPeers(vadSpeakingRef.current && !isMutedRef.current);
                     const ws = wsRef?.current;
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({
@@ -189,7 +200,15 @@ export function useVoice(user, wsRef) {
 
         const stream = streamRef.current;
         if (stream) {
-            stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+            stream.getTracks().forEach((t) => {
+                const sender = pc.addTrack(t, stream);
+                if (t.kind === 'audio') {
+                    audioSendersRef.current.set(targetId, sender);
+                    if (!(vadSpeakingRef.current && !isMutedRef.current)) {
+                        sender.replaceTrack(null).catch(() => {});
+                    }
+                }
+            });
         }
 
         pc.onicecandidate = (e) => {
@@ -286,6 +305,7 @@ export function useVoice(user, wsRef) {
                     const pid = msg.data.user_id;
                     const pc = peerConnectionsRef.current.get(pid);
                     if (pc) { pc.close(); peerConnectionsRef.current.delete(pid); }
+                    audioSendersRef.current.delete(pid);
                     const entry = audioElementsRef.current.get(pid);
                     if (entry) {
                         entry.audio.pause();
@@ -335,6 +355,7 @@ export function useVoice(user, wsRef) {
     const cleanupPeerConnections = useCallback(() => {
         peerConnectionsRef.current.forEach((pc) => pc.close());
         peerConnectionsRef.current.clear();
+        audioSendersRef.current.clear();
         audioElementsRef.current.forEach(({ audio }) => {
             audio.pause();
             audio.srcObject = null;
@@ -421,10 +442,7 @@ export function useVoice(user, wsRef) {
     const toggleMute = useCallback(() => {
         setIsMuted((prev) => {
             const next = !prev;
-            const stream = streamRef.current;
-            if (stream) {
-                stream.getAudioTracks().forEach((t) => { t.enabled = !next; });
-            }
+            gateAudioToPeers(!next && vadSpeakingRef.current);
             const ws = wsRef?.current;
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
