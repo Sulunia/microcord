@@ -77,9 +77,11 @@ export function useVoice(user, wsRef) {
     const vadRafRef = useRef(null);
     const vadSpeakingRef = useRef(false);
     const vadLastChangeRef = useRef(0);
+    const isMutedRef = useRef(false);
 
     useEffect(() => { userRef.current = user; }, [user]);
     useEffect(() => { isJoinedRef.current = isJoined; }, [isJoined]);
+    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
     const userId = user?.id;
 
@@ -139,6 +141,11 @@ export function useVoice(user, wsRef) {
                     vadSpeakingRef.current = !vadSpeakingRef.current;
                     vadLastChangeRef.current = now;
                     setIsSpeaking(vadSpeakingRef.current);
+                    const s = streamRef.current;
+                    if (s) {
+                        const shouldEnable = vadSpeakingRef.current && !isMutedRef.current;
+                        s.getAudioTracks().forEach((t) => { t.enabled = shouldEnable; });
+                    }
                     const ws = wsRef?.current;
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({
@@ -377,6 +384,7 @@ export function useVoice(user, wsRef) {
             };
             const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
             streamRef.current = stream;
+            stream.getAudioTracks().forEach((t) => { t.enabled = false; });
 
             const res = await fetch(`${API_BASE}/voice/join`, {
                 method: 'POST',
@@ -423,7 +431,8 @@ export function useVoice(user, wsRef) {
             const next = !prev;
             const stream = streamRef.current;
             if (stream) {
-                stream.getAudioTracks().forEach((t) => { t.enabled = !next; });
+                const shouldEnable = !next && vadSpeakingRef.current;
+                stream.getAudioTracks().forEach((t) => { t.enabled = shouldEnable; });
             }
             const ws = wsRef?.current;
             if (ws && ws.readyState === WebSocket.OPEN) {

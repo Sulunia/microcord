@@ -22,6 +22,7 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
   const localStreamRef = useRef(null);
   const peerConnectionsRef = useRef(new Map());
   const userRef = useRef(user);
+  const suppressSharerSyncRef = useRef(false);
 
   useEffect(() => { userRef.current = user; }, [user]);
 
@@ -31,6 +32,10 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
 
   useEffect(() => {
     if (isSharing) return;
+    if (suppressSharerSyncRef.current) {
+      suppressSharerSyncRef.current = false;
+      return;
+    }
     const sharer = voiceParticipants.find((p) => p.sharing);
     if (sharer) {
       setSharerUserId((prev) => prev === sharer.user_id ? prev : sharer.user_id);
@@ -87,6 +92,7 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
   const stopSharing = useCallback(() => {
     cleanupLocalStream();
     cleanupPeerConnections();
+    suppressSharerSyncRef.current = true;
 
     const ws = wsRef?.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -163,6 +169,7 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
           break;
         }
         case 'screenshare_stop': {
+          suppressSharerSyncRef.current = true;
           cleanupPeerConnections();
           setSharerUserId(null);
           setRemoteStream(null);
