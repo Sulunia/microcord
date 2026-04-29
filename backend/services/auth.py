@@ -90,7 +90,7 @@ def create_token(user_id: str, user_name: str) -> str:
 async def create_refresh_token(user_id: str) -> str:
     raw = secrets.token_urlsafe(48)
     token_hash = hashlib.sha256(raw.encode()).hexdigest()
-    expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS)
+    expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS)
     await repo.store_refresh_token(user_id, token_hash, expires_at)
     return raw
 
@@ -101,7 +101,7 @@ async def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
     if not rt:
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
 
     if rt.revoked_at is not None or rt.expires_at < now:
         return None

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import select, or_, and_
 from sqlalchemy import event
@@ -242,12 +242,12 @@ class BackendRepository:
             )
             rt = result.scalar_one_or_none()
             if rt:
-                rt.revoked_at = datetime.now(timezone.utc)
+                rt.revoked_at = datetime.utcnow()
         return await self._enqueue_write(_write)
 
     async def revoke_all_refresh_tokens_for_user(self, user_id: str) -> None:
         async def _write(session):
-            now = datetime.now(timezone.utc)
+            now = datetime.utcnow()
             result = await session.execute(
                 select(RefreshToken).where(
                     RefreshToken.user_id == user_id,
@@ -260,7 +260,7 @@ class BackendRepository:
 
     async def prune_expired_refresh_tokens(self) -> int:
         async def _write(session):
-            now = datetime.now(timezone.utc)
+            now = datetime.utcnow()
             result = await session.execute(
                 select(RefreshToken).where(
                     RefreshToken.expires_at < now,
