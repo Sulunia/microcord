@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.7.2**.
+Version **0.8.0**.
 
 ---
 
@@ -12,7 +12,7 @@ Version **0.7.2**.
 │   Browser    │◄──WS───►│  Starlette (ASGI shell)   │
 │  (Preact)    │◄─REST──►│  ├─ Connexion (OpenAPI)   │
 │              │         │  ├─ SecurityHeadersMiddleware │
-│  ├─ AuthMiddleware (JWT)  │
+│  ├─ AuthMiddleware (JWT access token + type claim)  │
 │  Voice:      │◄─P2P──►│  ├─ WS voice signaling     │
 │  WebRTC mesh │         │  ├─ WS screenshare signal  │
 │              │         │  ├─ WebSocket manager      │
@@ -51,7 +51,7 @@ microcord/
 │   ├── openapi/
 │   │   └── spec.yaml           # OpenAPI 3.0 spec — all endpoints & schemas
 │   ├── api/                    # Route handlers (operationId targets)
-│   │   ├── auth.py             # register, login, me, status, ws_ticket, logout
+│   │   ├── auth.py             # register, login, me, status, ws_ticket, refresh, logout
 │   │   ├── chat.py             # list_messages, send_message, delete_message
 │   │   ├── config.py           # get_branding (app name, voice channel name)
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
@@ -59,10 +59,10 @@ microcord/
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar
 │   ├── database/
-│   │   ├── models.py           # SQLAlchemy models (User, Message)
+│   │   ├── models.py           # SQLAlchemy models (User, Message, RefreshToken)
 │   │   └── repository.py      # Async repository (single-writer queue for SQLite safety)
 │   ├── services/
-│   │   ├── auth.py             # JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
+│   │   ├── auth.py             # Access/refresh token creation, rotation, JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
 │   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling)
@@ -82,7 +82,7 @@ microcord/
 │       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
 │       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
 │       ├── hooks/
-│       │   ├── use-user.js     # Auth (register/login/logout), profile update, avatar upload
+│       │   ├── use-user.js     # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
 │       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref, presence tracking (online user IDs)
 │       │   ├── use-voice.js    # Voice join/leave, mute toggle, VAD (AudioContext + AnalyserNode), WebRTC mesh for P2P audio, DOM-attached <audio> elements
 │       │   ├── use-screenshare.js  # WebRTC mesh, signaling over shared WS
@@ -123,9 +123,10 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | GET | `/api/branding` | `api.config.get_branding` | Public UI branding (app name, voice channel name). No auth required |
 | GET | `/api/livemediaconfig` | `api.livemedia.get_live_media_config` | Live media config (ICE servers, audio, screenshare, media processing). Requires JWT |
 | GET | `/api/auth/status` | `api.auth.status` | Auth provider info (`{ "provider": "local" }`) |
-| POST | `/api/auth/register` | `api.auth.register` | Register (name + password + passphrase) → user + JWT. Rate limited: 3/hour/IP |
-| POST | `/api/auth/login` | `api.auth.login` | Login (name + password) → user + JWT. Rate limited: 5/min/IP |
-| POST | `/api/auth/logout` | `api.auth.logout` | Revoke current JWT (server-side logout) |
+| POST | `/api/auth/register` | `api.auth.register` | Register (name + password + passphrase) → user + access_token + refresh_token. Rate limited: 3/hour/IP |
+| POST | `/api/auth/login` | `api.auth.login` | Login (name + password) → user + access_token + refresh_token. Rate limited: 5/min/IP |
+| POST | `/api/auth/logout` | `api.auth.logout` | Revoke current JWT + all refresh tokens for the user (server-side logout) |
+| POST | `/api/auth/refresh` | `api.auth.refresh` | Rotate refresh token → new access_token + refresh_token. Rate limited: 10/min/IP |
 | POST | `/api/auth/ws-ticket` | `api.auth.ws_ticket` | Issue one-time WebSocket ticket (requires JWT) |
 | GET | `/api/auth/me` | `api.auth.me` | Current user from JWT |
 | GET | `/api/users` | `api.users.list_users` | List all users (includes `online` boolean) |
@@ -184,7 +185,8 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 |----------|---------|-------|-------------|
 | `AUTH_PROVIDER` | `local` | Backend | Auth backend (`local` = bcrypt + SQLite) |
 | `JWT_SECRET` | *(auto-generated)* | Backend | HMAC secret (≥32 chars); saved to `data/.jwt_secret` on first boot if omitted |
-| `JWT_EXPIRY_HOURS` | `24` | Backend | Token lifetime in hours |
+| `ACCESS_TOKEN_EXPIRY_MINUTES` | `5` | Backend | Access token lifetime in minutes |
+| `REFRESH_TOKEN_EXPIRY_DAYS` | `30` | Backend | Refresh token lifetime in days |
 | `CORS_ORIGIN` | `http://localhost:5173` | Backend | Allowed CORS origin |
 | `REGISTRATION_PASSPHRASE` | *(auto-generated)* | Backend | 6-digit hex uppercase passphrase required for registration; auto-generated and logged on startup if not set |
 | `TRUST_PROXY` | `false` | Backend | Trust `X-Forwarded-For` / `X-Real-IP` headers for rate limiting. Enable when behind a reverse proxy |
@@ -212,6 +214,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `CHOKIDAR_USEPOLLING` | `true` | Frontend (Docker) | Enable file-system polling for Vite HMR in containers |
 
 > *(removed 2026-04-24)* `APP_TAGLINE` — tagline removed from UI; endpoint no longer returns it
+> *(removed 2026-04-28)* `JWT_EXPIRY_HOURS` — replaced by `ACCESS_TOKEN_EXPIRY_MINUTES` and `REFRESH_TOKEN_EXPIRY_DAYS`
 
 ---
 
@@ -238,6 +241,18 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `content` | Text | Markdown-rendered on the client |
 | `image_url` | String, nullable | Must start with `/uploads/` |
 | `created_at` | DateTime | UTC, auto-set |
+
+### RefreshToken (`backend/database/models.py`)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID (PK) | Auto-generated |
+| `user_id` | UUID (FK → User) | Token owner |
+| `token_hash` | String(128), unique | SHA-256 hash of the raw token (plaintext never stored) |
+| `consumed` | Boolean | Set when consumed by a rotation (reuse detection) |
+| `created_at` | DateTime | UTC, auto-set |
+| `expires_at` | DateTime | When it expires |
+| `revoked_at` | DateTime, nullable | When explicitly revoked |
 
 ---
 
@@ -278,12 +293,13 @@ Starlette is provided transitively through Connexion.
 2. Registration requires the server passphrase (auto-generated on startup, logged to console; override via `REGISTRATION_PASSPHRASE` env var).
 3. Both endpoints are rate limited (register: 3/hour/IP; login: 5/min/IP). Exceeding limits triggers exponential backoff up to a cap.
 4. Backend validates credentials (bcrypt verify for login, bcrypt hash for register).
-5. Returns `{ user, token }` — JWT (HS256, issuer/audience: `microcord`, expiry from env).
-6. Client stores `token` and `user` in `localStorage`.
-7. All subsequent HTTP requests include `Authorization: Bearer <token>`.
+5. Returns `{ user, access_token, refresh_token }` — access token is a short-lived JWT (HS256, default 5 min, `type: "access"` claim); refresh token is a long-lived opaque random token (default 30 days, SHA-256 hashed in DB).
+6. Client stores both tokens and `user` in `localStorage`.
+7. All subsequent HTTP requests include `Authorization: Bearer <access_token>`. The `authedFetch()` wrapper automatically refreshes on 401.
 8. For WebSocket, client first calls `POST /api/auth/ws-ticket` to obtain a one-time ticket, then connects with `?ticket=<ticket>`. The ticket is consumed on handshake and expires in 30 seconds.
-9. `AuthMiddleware` enforces JWT on all HTTP routes except `/api/auth/*`, `/api/branding`, and `/uploads/*`. Revoked tokens are rejected.
-10. `POST /api/auth/logout` revokes the current JWT server-side (in-memory blocklist), preventing reuse of stolen tokens.
+9. `AuthMiddleware` enforces JWT access tokens on all HTTP routes except `/api/auth/*`, `/api/branding`, and `/uploads/*`. It checks the `type: "access"` claim. Revoked tokens are rejected.
+10. `POST /api/auth/refresh` rotates a refresh token: issues a new access/refresh pair, marks the old refresh token as replaced. If a previously-used refresh token is replayed (reuse detection), all refresh tokens for that user are revoked.
+11. `POST /api/auth/logout` revokes the access token's JTI server-side (in-memory blocklist) and revokes all refresh tokens for the user.
 
 ### Chat message
 
@@ -401,14 +417,16 @@ Both directories are gitignored. See README for backup/restore instructions.
 
 | Control | Implementation |
 |---------|----------------|
-| Auth always on | Every HTTP and WS request requires a valid JWT (WS via one-time ticket), except `/api/auth/*`, `/api/branding`, and `/uploads/*` |
+| Auth always on | Every HTTP and WS request requires a valid JWT access token (WS via one-time ticket), except `/api/auth/*`, `/api/branding`, and `/uploads/*` |
 | Identity from JWT | Author/user IDs derived from token, never from request bodies |
 | IDOR protection | `PATCH /users/{id}` rejects modifications to other users; `DELETE /messages/{id}` rejects deletion of other users' messages |
 | XSS sanitization | Chat markdown rendered with snarkdown, sanitized with DOMPurify |
 | JWT algorithm pinning | Only HS256 accepted; `none` and others rejected |
-| JWT validation | Issuer, audience, and expiry enforced on every decode |
-| Token revocation | `POST /api/auth/logout` adds JWT to in-memory blocklist; checked by `AuthMiddleware` |
-| Rate limiting | In-memory with exponential backoff per endpoint: register (3/hr/IP, max 1h), login (5/min/IP, max 5m), messages (10/10s/user, max 1m), uploads (5/min/user, max 2m) |
+| JWT validation | Issuer, audience, expiry, and `type: "access"` claim enforced on every decode |
+| Token revocation | `POST /api/auth/logout` adds access JWT to in-memory blocklist and revokes refresh token; checked by `AuthMiddleware` |
+| Refresh token rotation | Every refresh issues a new refresh token and invalidates the old one. Reuse detection revokes all refresh tokens for the user |
+| Refresh token storage | SHA-256 hashed in DB; plaintext only returned once at creation |
+| Rate limiting | In-memory with exponential backoff per endpoint: register (3/hr/IP, max 1h), login (5/min/IP, max 5m), messages (10/10s/user, max 1m), uploads (5/min/user, max 2m), refresh (10/min/IP, max 2m) |
 | Registration passphrase | 6-digit hex uppercase secret required to register; auto-generated and logged on startup, override via `REGISTRATION_PASSPHRASE` env var |
 | WS message size limit | Inbound WebSocket messages exceeding 64 KB are dropped |
 | CORS lockdown | Restricted to `CORS_ORIGIN` (default `http://localhost:5173`) |

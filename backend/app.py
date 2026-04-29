@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,7 +12,7 @@ from starlette.routing import WebSocketRoute, Mount
 
 from constants import UPLOAD_DIR, CORS_ORIGIN, AUTH_PROVIDER
 from database.repository import repo
-from services.auth import AuthMiddleware
+from services.auth import AuthMiddleware, refresh_token_prune_loop
 from services.guard import guard
 from services.media_manager import media_manager
 from services.security_headers import SecurityHeadersMiddleware
@@ -36,10 +37,12 @@ async def lifespan(_app):
     repo.start_writer()
     media_manager.start()
     guard.log_passphrase()
+    prune_task = asyncio.ensure_future(refresh_token_prune_loop())
     logger = logging.getLogger(__name__)
     mode = "production" if FRONTEND_DIR.is_dir() else "development"
     logger.info(f"Microcord backend ready (auth provider: {AUTH_PROVIDER}, mode: {mode})")
     yield
+    prune_task.cancel()
 
 
 routes = [

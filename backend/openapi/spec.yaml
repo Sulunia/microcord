@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: Microcord API
-  version: "0.7.3"
+  version: "0.8.0"
   description: Minimal Discord-like self-hosted chat and voice API.
 
 servers:
@@ -85,6 +85,28 @@ paths:
         "429":
           description: Rate limited
 
+  /auth/refresh:
+    post:
+      operationId: api.auth.refresh
+      summary: Rotate a refresh token to get a new access/refresh token pair
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "401":
+          description: Invalid or expired refresh token
+        "429":
+          description: Rate limited
+
   /auth/me:
     get:
       operationId: api.auth.me
@@ -137,7 +159,7 @@ paths:
   /auth/logout:
     post:
       operationId: api.auth.logout
-      summary: Revoke the current JWT (server-side logout)
+      summary: Revoke the current JWT and all refresh tokens for the user (server-side logout)
       security:
         - bearerAuth: []
       responses:
@@ -470,8 +492,31 @@ components:
       properties:
         user:
           $ref: "#/components/schemas/User"
-        token:
+        access_token:
           type: string
+          description: Short-lived JWT access token (default 5 min)
+        refresh_token:
+          type: string
+          description: Long-lived opaque refresh token (default 30 days)
+
+    RefreshRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          description: The raw refresh token to rotate
+
+    RefreshResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: New short-lived JWT access token
+        refresh_token:
+          type: string
+          description: New long-lived opaque refresh token
 
     UpdateUserRequest:
       type: object
