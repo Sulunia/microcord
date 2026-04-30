@@ -7,6 +7,7 @@ import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
+import { RealtimeProvider } from './hooks/realtime.js';
 import { UI_CONFIG } from './constants.js';
 import styles from './app.module.css';
 
@@ -51,11 +52,10 @@ function HelpModal({ onClose }) {
   );
 }
 
-export function App() {
-  const { user, ready, error, register, login, logout, updateProfile, uploadAvatar } = useUser();
+function AuthenticatedApp({ user, logout, updateProfile, uploadAvatar }) {
   const chat = useChat(user);
-  const voice = useVoice(user, chat.ws);
-  const screenshare = useScreenshare(user, chat.ws, voice.participants, voice.isJoined);
+  const voice = useVoice(user);
+  const screenshare = useScreenshare(user, voice.participants, voice.isJoined);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [showHelp, setShowHelp] = useState(false);
   const [showMembers, setShowMembers] = useState(true);
@@ -84,11 +84,6 @@ export function App() {
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   }, []);
-
-  if (!user) {
-    if (!ready) return null;
-    return <LoginScreen onRegister={register} onLogin={login} error={error} />;
-  }
 
   return (
     <div class="window glass active" style={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column', '--w7-w-bg': 'var(--mc-window-glass)' }}>
@@ -129,5 +124,25 @@ export function App() {
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
+  );
+}
+
+export function App() {
+  const { user, ready, error, register, login, logout, updateProfile, uploadAvatar } = useUser();
+
+  if (!user) {
+    if (!ready) return null;
+    return <LoginScreen onRegister={register} onLogin={login} error={error} />;
+  }
+
+  return (
+    <RealtimeProvider user={user}>
+      <AuthenticatedApp
+        user={user}
+        logout={logout}
+        updateProfile={updateProfile}
+        uploadAvatar={uploadAvatar}
+      />
+    </RealtimeProvider>
   );
 }

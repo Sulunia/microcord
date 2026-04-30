@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
 import { LIVE_MEDIA_CONFIG } from '../constants.js';
+import { useRealtime } from './realtime.js';
 
 function getDisplayConstraints() {
     const s = LIVE_MEDIA_CONFIG.screenshare;
@@ -13,7 +14,7 @@ function getDisplayConstraints() {
     };
 }
 
-export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
+export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
   const [isSharing, setIsSharing] = useState(false);
   const [sharerUserId, setSharerUserId] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -23,6 +24,8 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
   const peerConnectionsRef = useRef(new Map());
   const userRef = useRef(user);
   const suppressSharerSyncRef = useRef(false);
+
+  const { send, subscribe, connected } = useRealtime();
 
   useEffect(() => { userRef.current = user; }, [user]);
 
@@ -44,41 +47,6 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
     }
   }, [voiceParticipants, isSharing]);
 
-  const createPC = useCallback((targetId, stream) => {
-    const existing = peerConnectionsRef.current.get(targetId);
-    if (existing) existing.close();
-
-    const pc = new RTCPeerConnection({ iceServers: LIVE_MEDIA_CONFIG.iceServers });
-    if (stream) {
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-    }
-    pc.onicecandidate = (e) => {
-      if (!e.candidate) return;
-      const ws = wsRef?.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'screenshare_signal',
-          data: { target: targetId, signal: { type: 'ice-candidate', candidate: e.candidate } },
-        }));
-      }
-    };
-    peerConnectionsRef.current.set(targetId, pc);
-    return pc;
-  }, [wsRef]);
-
-  const sendOffer = useCallback(async (targetId, stream) => {
-    const pc = createPC(targetId, stream);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    const ws = wsRef?.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'screenshare_signal',
-        data: { target: targetId, signal: { type: 'offer', sdp: offer.sdp } },
-      }));
-    }
-  }, [createPC, wsRef]);
-
   const cleanupPeerConnections = useCallback(() => {
     peerConnectionsRef.current.forEach((pc) => pc.close());
     peerConnectionsRef.current.clear();
@@ -89,20 +57,68 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
     localStreamRef.current = null;
   }, []);
 
+  const createPC = useCallback((targetId, stream) => {
+    const existing = peerConnectionsRef.current.get(targetId);
+    if (existing) existing.close();
+
+    const pc = new RTCPeerConnection({ iceServers: LIVE_MEDIA_CONFIG.iceServers });
+    if (stream) {
+      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+    }
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) return;
+      send('screenshare_signal', { target: targetId, signal: { type: 'ice-candidate', candidate: e.candidate } });
+    };
+    peerConnectionsRef.current.set(targetId, pc);
+    return pc;
+  }, [send]);
+
+  const sendOffer = useCallback(async (targetId, stream) => {
+    const pc = createPC(targetId, stream);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    send('screenshare_signal', { target: targetId, signal: { type: 'offer', sdp: offer.sdp } });
+  }, [createPC, send]);
+
+  const handleScreenshareSignal = useCallback(async (fromId, signal) => {
+    switch (signal.type) {
+      case 'offer': {
+        const pc = createPC(fromId, null);
+        pc.ontrack = (event) => {
+          setRemoteStream(event.streams[0] || new MediaStream([event.track]));
+        };
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: signal.sdp }));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        send('screenshare_signal', { target: fromId, signal: { type: 'answer', sdp: answer.sdp } });
+        break;
+      }
+      case 'answer': {
+        const pc = peerConnectionsRef.current.get(fromId);
+        if (pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
+        }
+        break;
+      }
+      case 'ice-candidate': {
+        const pc = peerConnectionsRef.current.get(fromId);
+        if (pc && signal.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
+        }
+        break;
+      }
+    }
+  }, [createPC, send]);
+
   const stopSharing = useCallback(() => {
     cleanupLocalStream();
     cleanupPeerConnections();
     suppressSharerSyncRef.current = true;
-
-    const ws = wsRef?.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'screenshare_stop' }));
-    }
-
+    send('screenshare_stop');
     setIsSharing(false);
     setSharerUserId(null);
     setRemoteStream(null);
-  }, [wsRef, cleanupLocalStream, cleanupPeerConnections]);
+  }, [send, cleanupLocalStream, cleanupPeerConnections]);
 
   const startSharing = useCallback(async () => {
     const u = userRef.current;
@@ -116,9 +132,8 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
         stopSharing();
       });
 
-      const ws = wsRef?.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('WS not connected');
-      ws.send(JSON.stringify({ type: 'screenshare_start' }));
+      if (!connected) throw new Error('WS not connected');
+      send('screenshare_start');
 
       setIsSharing(true);
       setSharerUserId(u.id);
@@ -136,7 +151,7 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
       cleanupLocalStream();
       cleanupPeerConnections();
     }
-  }, [isVoiceJoined, isSharing, sharerUserId, wsRef, voiceParticipants, sendOffer, stopSharing, cleanupLocalStream, cleanupPeerConnections]);
+  }, [isVoiceJoined, isSharing, sharerUserId, connected, send, voiceParticipants, sendOffer, stopSharing, cleanupLocalStream, cleanupPeerConnections]);
 
   const stopViewing = useCallback(() => {
     cleanupPeerConnections();
@@ -147,105 +162,48 @@ export function useScreenshare(user, wsRef, voiceParticipants, isVoiceJoined) {
   const requestStream = useCallback(() => {
     if (!sharerUserId || isSharing) return;
     setDismissed(false);
-    const ws = wsRef?.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'screenshare_request' }));
-    }
-  }, [sharerUserId, isSharing, wsRef]);
+    send('screenshare_request');
+  }, [sharerUserId, isSharing, send]);
 
   useEffect(() => {
-    if (!wsRef?.current) return;
-    const ws = wsRef.current;
-
-    const onMessage = (e) => {
-      if (typeof e.data !== 'string') return;
-      let msg;
-      try { msg = JSON.parse(e.data); } catch { return; }
-
-      switch (msg.type) {
-        case 'screenshare_start': {
-          setSharerUserId(msg.data.user_id);
-          setDismissed(false);
-          break;
+    const unsubs = [
+      subscribe('screenshare_start', (data) => {
+        setSharerUserId(data.user_id);
+        setDismissed(false);
+      }),
+      subscribe('screenshare_stop', () => {
+        suppressSharerSyncRef.current = true;
+        cleanupPeerConnections();
+        setSharerUserId(null);
+        setRemoteStream(null);
+      }),
+      subscribe('screenshare_error', (data) => {
+        console.error('Screenshare error:', data.error);
+        cleanupLocalStream();
+        cleanupPeerConnections();
+        setIsSharing(false);
+      }),
+      subscribe('screenshare_signal', (data) => {
+        handleScreenshareSignal(data.from, data.signal);
+      }),
+      subscribe('screenshare_request', (data) => {
+        const requesterId = data.user_id;
+        if (localStreamRef.current) {
+          sendOffer(requesterId, localStreamRef.current);
         }
-        case 'screenshare_stop': {
-          suppressSharerSyncRef.current = true;
-          cleanupPeerConnections();
-          setSharerUserId(null);
-          setRemoteStream(null);
-          break;
-        }
-        case 'screenshare_error': {
-          console.error('Screenshare error:', msg.data.error);
-          cleanupLocalStream();
-          cleanupPeerConnections();
-          setIsSharing(false);
-          break;
-        }
-        case 'screenshare_signal': {
-          const { from, signal } = msg.data;
-          _handleSignal(from, signal);
-          break;
-        }
-        case 'screenshare_request': {
-          const requesterId = msg.data.user_id;
-          if (localStreamRef.current) {
-            sendOffer(requesterId, localStreamRef.current);
+      }),
+      subscribe('voice_participant_joined', (data) => {
+        if (localStreamRef.current) {
+          const u = userRef.current;
+          const pid = data.user_id;
+          if (pid !== u?.id) {
+            sendOffer(pid, localStreamRef.current);
           }
-          break;
         }
-        case 'voice_participant_joined': {
-          if (localStreamRef.current) {
-            const u = userRef.current;
-            const pid = msg.data.user_id;
-            if (pid !== u?.id) {
-              sendOffer(pid, localStreamRef.current);
-            }
-          }
-          break;
-        }
-      }
-    };
-
-    const _handleSignal = async (fromId, signal) => {
-      switch (signal.type) {
-        case 'offer': {
-          const pc = createPC(fromId, null);
-          pc.ontrack = (event) => {
-            setRemoteStream(event.streams[0] || new MediaStream([event.track]));
-          };
-          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: signal.sdp }));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          const ws = wsRef?.current;
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'screenshare_signal',
-              data: { target: fromId, signal: { type: 'answer', sdp: answer.sdp } },
-            }));
-          }
-          break;
-        }
-        case 'answer': {
-          const pc = peerConnectionsRef.current.get(fromId);
-          if (pc) {
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
-          }
-          break;
-        }
-        case 'ice-candidate': {
-          const pc = peerConnectionsRef.current.get(fromId);
-          if (pc && signal.candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
-          }
-          break;
-        }
-      }
-    };
-
-    ws.addEventListener('message', onMessage);
-    return () => ws.removeEventListener('message', onMessage);
-  }, [wsRef?.current, createPC, sendOffer, cleanupPeerConnections, cleanupLocalStream]);
+      }),
+    ];
+    return () => unsubs.forEach((fn) => fn());
+  }, [subscribe, handleScreenshareSignal, cleanupPeerConnections, cleanupLocalStream, sendOffer]);
 
   useEffect(() => {
     if (!isVoiceJoined && isSharing) {
