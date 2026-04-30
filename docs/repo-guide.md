@@ -22,7 +22,7 @@ Version **0.8.1**.
                           SQLite (WAL mode)
 ```
 
-- **Frontend** — Preact + Vite, served on port 5173. Vite proxies `/api`, `/ws`, `/uploads` to the backend.
+- **Frontend** — Preact + Vite, served on port 5173. Vite proxies `/api`, `/ws`, `/uploads` to the backend. A shared `RealtimeProvider` context owns the single WebSocket connection; all hooks consume `useRealtime()` for send/subscribe.
 - **Backend** — Python 3.12 ASGI app. Starlette wraps Connexion (OpenAPI-driven routes), a native WebSocket endpoint, and a static file mount for uploads.
 - **Database** — SQLite with WAL mode, single-writer asyncio queue for mutations, separate async session pool for reads.
 - **Voice** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay; audio flows directly between browsers via RTCPeerConnection.
@@ -77,16 +77,18 @@ microcord/
 │   ├── index.html
 │   └── src/
 │       ├── main.jsx            # Mount <App />, import global styles
-│       ├── app.jsx             # Shell: login vs main window, hook composition, resizable sidebar, toggleable members sidebar
+│       ├── app.jsx             # Shell: login vs main window, <RealtimeProvider> wrapper, <AuthenticatedApp> with hook composition, resizable sidebar, toggleable members sidebar
 │       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
 │       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
 │       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
 │       ├── hooks/
-│       │   ├── use-user.js     # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
-│       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref, presence tracking (online user IDs)
-│       │   ├── use-voice.js    # Voice join/leave, mute toggle, VAD (AudioContext + AnalyserNode), WebRTC mesh for P2P audio, DOM-attached <audio> elements
-│       │   ├── use-screenshare.js  # WebRTC mesh, signaling over shared WS
-│       │   └── use-theme.js    # Light/dark theme toggle, persisted in localStorage
+│       │   ├── realtime.jsx        # RealtimeProvider context + useRealtime() hook; owns WS lifecycle (ticket, connect, reconnect); exposes send/subscribe/connected
+│       │   ├── webrtc-helpers.js   # createPeerMap() factory — shared peer-connection map with closePeer, closeAllPeers, sendOffer, applySignal
+│       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
+│       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs)
+│       │   ├── use-voice.js        # Voice join/leave (state machine: idle→joining→joined→leaving→idle), mute toggle, VAD, WebRTC mesh via createPeerMap, DOM-attached <audio> elements
+│       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
+│       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
 │       ├── components/
 │       │   ├── login-screen.jsx
 │       │   ├── login-screen.module.css
@@ -321,23 +323,24 @@ Starlette is provided transitively through Connexion.
 ### Voice
 
 1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, audio constraints).
-2. Client `POST /api/voice/join` → backend adds user to in-memory `voice_room`, returns participant list.
-3. `voice_participant_joined` broadcast to all WS clients.
-4. Joiner creates an `RTCPeerConnection` (mesh) to each existing participant and sends SDP offers via `voice_signal`.
-5. Existing participants receive offers, create answers, and send them back via `voice_signal`.
-6. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
-7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
-8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
-9. Mute toggle gates audio to peers via `RTCRtpSender.replaceTrack(null)` and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
-10. Client-side VAD uses `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`) persisted in localStorage `mc-vad-sensitivity` (range 1–100, default 50, higher = more sensitive). When speaking state changes (with 90ms debounce), audio is gated to peers via `RTCRtpSender.replaceTrack(audioTrack | null)` — the local stream stays enabled so VAD always has real mic input. `voice_speaking` is also sent over WS; server broadcasts to all clients. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own lightweight mic analyser to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
-11. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
+2. `useVoice.join()` transitions through a state machine: `idle → joining → joined` (or back to `idle` on error).
+3. On `joining`: acquire mic stream via `getUserMedia`, then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
+4. `voice_participant_joined` broadcast to all WS clients.
+5. Joiner creates an `RTCPeerConnection` (mesh) to each existing participant and sends SDP offers via `voice_signal`. Peer connections are managed through `createPeerMap()` from `webrtc-helpers.js`.
+6. Existing participants receive offers, create answers, and send them back via `voice_signal`.
+7. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
+8. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
+9. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
+10. Mute toggle gates audio to peers via `RTCRtpSender.replaceTrack(null)` and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
+11. Client-side VAD uses `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`) persisted in localStorage `mc-vad-sensitivity` (range 1–100, default 50, higher = more sensitive). When speaking state changes (with 90ms debounce), audio is gated to peers via `RTCRtpSender.replaceTrack(audioTrack | null)` — the local stream stays enabled so VAD always has real mic input. `voice_speaking` is also sent over WS; server broadcasts to all clients. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own lightweight mic analyser to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
+12. `useVoice.leave()` transitions `joined → leaving → idle`, cleans up all peer connections/VAD/stream, then calls `POST /api/voice/leave`. `voice_participant_left` broadcast.
 
 ### Screen sharing
 
 1. Sharer sends `screenshare_start` over WS → backend checks single-sharer constraint.
 2. If allowed, broadcasts `screenshare_start` to all clients.
 3. Viewers send `screenshare_request` → relayed to sharer.
-4. Sharer creates WebRTC peer connection, sends SDP offer via `screenshare_signal`.
+4. Sharer creates WebRTC peer connection (via `createPeerMap`), sends SDP offer via `screenshare_signal`.
 5. All signaling (offers, answers, ICE candidates) relayed through backend WS.
 6. Media flows peer-to-peer (WebRTC). Backend never touches video/audio data.
 7. `screenshare_stop` on disconnect or explicit stop; backend clears sharer state.
@@ -347,7 +350,7 @@ Starlette is provided transitively through Connexion.
 1. When a client's WebSocket connects, the server sends `presence_init` with `{ user_ids }` — the full list of currently connected user IDs — to that client only.
 2. The server broadcasts `presence_online` with `{ user_id }` to all other connected clients.
 3. When a client's WebSocket disconnects, the server broadcasts `presence_offline` with `{ user_id }` to all remaining connected clients.
-4. `use-chat.js` tracks `onlineUserIds` state from these events and exposes it to the UI.
+4. `use-chat.js` subscribes to presence events via `useRealtime()` and tracks `onlineUserIds` state from these events.
 5. `MembersSidebar` displays all users from `usersMap`, grouped by online/offline, with green/gray status dots.
 6. `GET /api/users` now includes an `online` boolean per user; `GET /api/users/online` returns just the online user IDs.
 

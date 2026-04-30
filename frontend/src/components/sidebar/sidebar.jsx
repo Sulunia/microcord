@@ -29,7 +29,7 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch,
 }
 
 export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style }) {
-  const { participants, isJoined, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute } = voice;
+  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const prevIdsRef = useRef(new Set());
@@ -134,8 +134,9 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
         <button
           class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
           onClick={isJoined ? leave : join}
+          disabled={joinState === 'joining' || joinState === 'leaving'}
         >
-          {isJoined ? 'Disconnect' : 'Join Voice'}
+          {joinState === 'joining' ? 'Joining…' : joinState === 'leaving' ? 'Leaving…' : isJoined ? 'Disconnect' : 'Join Voice'}
         </button>
         {isJoined && (
           <button
