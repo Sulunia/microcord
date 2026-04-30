@@ -67,7 +67,8 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
         const now = performance.now();
         const loud = rms > threshold;
         if (loud !== speaking) {
-          if (now - lastChange >= 90) {
+          const debounceMs = loud && !speaking ? 35 : 150;
+          if (now - lastChange >= debounceMs) {
             speaking = loud;
             lastChange = now;
             setMicDetected(speaking);

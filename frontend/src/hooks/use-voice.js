@@ -133,7 +133,8 @@ export function useVoice(user) {
         vadAnalyserRef.current = analyser;
 
         const data = new Uint8Array(analyser.fftSize);
-        const DEBOUNCE_MS = 90;
+        const RISING_DEBOUNCE_MS = 25;
+        const FALLING_DEBOUNCE_MS = 120;
 
         const tick = () => {
             analyser.getByteTimeDomainData(data);
@@ -146,9 +147,11 @@ export function useVoice(user) {
             const sensitivity = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50;
             const threshold = computeVadThreshold(sensitivity);
             const now = performance.now();
+            const wouldStartSpeaking = rms > threshold && !vadSpeakingRef.current;
 
             if (rms > threshold !== vadSpeakingRef.current) {
-                if (now - vadLastChangeRef.current >= DEBOUNCE_MS) {
+                const debounceMs = wouldStartSpeaking ? RISING_DEBOUNCE_MS : FALLING_DEBOUNCE_MS;
+                if (now - vadLastChangeRef.current >= debounceMs) {
                     vadSpeakingRef.current = !vadSpeakingRef.current;
                     vadLastChangeRef.current = now;
                     setIsSpeaking(vadSpeakingRef.current);
