@@ -1,3 +1,6 @@
+import asyncio
+import functools
+import hashlib
 import logging
 import random
 import secrets
@@ -12,15 +15,14 @@ from starlette.responses import JSONResponse
 
 from constants import (
     AUTH_PROVIDER, JWT_SECRET, JWT_ALGORITHM, JWT_ISSUER, JWT_AUDIENCE,
-    JWT_EXPIRY_HOURS, JWT_SECRET_MIN_LENGTH, JWT_SECRET_FILE,
+    ACCESS_TOKEN_EXPIRY_MINUTES, REFRESH_TOKEN_EXPIRY_DAYS,
+    JWT_SECRET_MIN_LENGTH, JWT_SECRET_FILE,
 )
 from database.models import TICK_SOUNDS
 from database.repository import repo
 from services.guard import guard
 
 logger = logging.getLogger(__name__)
-
-_jwt_secret: str | None = None
 
 AUTH_EXEMPT_PREFIXES = (
     "/api/auth/",
@@ -35,11 +37,8 @@ def _is_auth_required(path: str) -> bool:
     )
 
 
+@functools.lru_cache(maxsize=1)
 def _resolve_secret() -> str:
-    global _jwt_secret
-    if _jwt_secret:
-        return _jwt_secret
-
     secret = JWT_SECRET
     secret_path = Path(JWT_SECRET_FILE)
 
@@ -57,7 +56,6 @@ def _resolve_secret() -> str:
         secret_path.chmod(0o600)
         logger.info(f"Generated JWT secret and saved to {JWT_SECRET_FILE}")
 
-    _jwt_secret = secret
     return secret
 
 
@@ -69,19 +67,80 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
-def create_token(user_id: str, user_name: str) -> str:
+def create_access_token(user_id: str, user_name: str) -> str:
     secret = _resolve_secret()
     now = datetime.now(timezone.utc)
     payload = {
         "sub": user_id,
         "name": user_name,
         "jti": str(uuid.uuid4()),
+        "type": "access",
         "iat": now,
-        "exp": now + timedelta(hours=JWT_EXPIRY_HOURS),
+        "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRY_MINUTES),
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
     }
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+
+
+def create_token(user_id: str, user_name: str) -> str:
+    return create_access_token(user_id, user_name)
+
+
+async def create_refresh_token(user_id: str) -> str:
+    raw = secrets.token_urlsafe(48)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS)
+    await repo.store_refresh_token(user_id, token_hash, expires_at)
+    return raw
+
+
+async def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    rt = await repo.get_refresh_token_by_hash(token_hash)
+    if not rt:
+        return None
+
+    now = datetime.utcnow()
+
+    if rt.revoked_at is not None or rt.expires_at < now:
+        return None
+
+    if rt.consumed:
+        logger.warning(
+            "Refresh token reuse detected for user %s — revoking all refresh tokens",
+            rt.user_id,
+        )
+        await repo.revoke_all_refresh_tokens_for_user(rt.user_id)
+        return None
+
+    user = await repo.get_user_by_id(rt.user_id)
+    if not user:
+        return None
+
+    new_raw = secrets.token_urlsafe(48)
+    new_hash = hashlib.sha256(new_raw.encode()).hexdigest()
+    new_expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS)
+    await repo.store_refresh_token(rt.user_id, new_hash, new_expires_at)
+    await repo.consume_refresh_token(rt.id)
+
+    access_token = create_access_token(user.id, user.name)
+    return access_token, new_raw
+
+
+async def revoke_refresh_token_by_raw(raw_token: str) -> None:
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    rt = await repo.get_refresh_token_by_hash(token_hash)
+    if rt:
+        await repo.revoke_refresh_token(rt.id)
+
+
+async def revoke_all_refresh_tokens(user_id: str) -> None:
+    await repo.revoke_all_refresh_tokens_for_user(user_id)
+
+
+async def prune_expired_refresh_tokens() -> int:
+    return await repo.prune_expired_refresh_tokens()
 
 
 def decode_token(token: str) -> dict | None:
@@ -129,6 +188,16 @@ def _build_provider() -> AuthProvider:
     raise ValueError(f"Unknown AUTH_PROVIDER: {AUTH_PROVIDER!r} (supported: local)")
 
 
+async def refresh_token_prune_loop():
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            count = await prune_expired_refresh_tokens()
+            if count:
+                logger.debug("Pruned %d expired refresh tokens", count)
+        except Exception:
+            logger.exception("Failed to prune refresh tokens")
+
 auth_provider = _build_provider()
 
 
@@ -162,6 +231,12 @@ class AuthMiddleware:
             )
             return await response(scope, receive, send)
 
+        if payload.get("type") != "access":
+            response = JSONResponse(
+                {"error": "Invalid token type"}, status_code=401
+            )
+            return await response(scope, receive, send)
+
         if guard.is_jti_revoked(payload["jti"]):
             response = JSONResponse(
                 {"error": "Token has been revoked"}, status_code=401
@@ -171,4 +246,5 @@ class AuthMiddleware:
         scope.setdefault("state", {})["current_user"] = {
             "id": payload["sub"], "name": payload["name"],
         }
+
         return await self.app(scope, receive, send)

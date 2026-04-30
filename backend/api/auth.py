@@ -5,7 +5,10 @@ from connexion import request as connexion_request
 
 from constants import AUTH_PROVIDER, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH
 from database.repository import repo
-from services.auth import auth_provider, create_token, decode_token
+from services.auth import (
+    auth_provider, create_access_token, create_refresh_token,
+    rotate_refresh_token, revoke_all_refresh_tokens, decode_token,
+)
 from services.guard import guard, get_client_ip
 from services.ws_ticket import create_ticket
 
@@ -52,9 +55,14 @@ async def register(body: dict) -> ConnexionResponse:
     if user is None:
         return ConnexionResponse(status_code=409, body={"error": "Username already taken"})
 
-    token = create_token(user.id, user.name)
+    access_token = create_access_token(user.id, user.name)
+    refresh_token = await create_refresh_token(user.id)
     logger.info(f"Auth register: {user.name} ({user.id})")
-    return ConnexionResponse(status_code=201, body={"user": user.to_dict(), "token": token})
+    return ConnexionResponse(status_code=201, body={
+        "user": user.to_dict(),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    })
 
 
 async def login(body: dict) -> ConnexionResponse:
@@ -73,9 +81,35 @@ async def login(body: dict) -> ConnexionResponse:
     if user is None:
         return ConnexionResponse(status_code=401, body={"error": "Invalid credentials"})
 
-    token = create_token(user.id, user.name)
+    access_token = create_access_token(user.id, user.name)
+    refresh_token = await create_refresh_token(user.id)
     logger.info(f"Auth login: {user.name} ({user.id})")
-    return ConnexionResponse(status_code=200, body={"user": user.to_dict(), "token": token})
+    return ConnexionResponse(status_code=200, body={
+        "user": user.to_dict(),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    })
+
+
+async def refresh(body: dict) -> ConnexionResponse:
+    ip = _get_ip()
+    rl = _ratelimited(guard.check_refresh(ip))
+    if rl:
+        return rl
+
+    raw_token = body.get("refresh_token", "")
+    if not raw_token:
+        return ConnexionResponse(status_code=400, body={"error": "refresh_token required"})
+
+    result = await rotate_refresh_token(raw_token)
+    if result is None:
+        return ConnexionResponse(status_code=401, body={"error": "Invalid or expired refresh token"})
+
+    access_token, new_refresh_token = result
+    return ConnexionResponse(status_code=200, body={
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+    })
 
 
 async def me(**kwargs) -> ConnexionResponse:
@@ -136,5 +170,6 @@ async def logout(**kwargs) -> ConnexionResponse:
     if not payload:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
     guard.revoke_jti(payload["jti"], payload["exp"])
+    await revoke_all_refresh_tokens(payload["sub"])
     logger.info("Auth logout: token revoked (jti=%s)", payload["jti"])
     return ConnexionResponse(status_code=200, body={"message": "Logged out"})

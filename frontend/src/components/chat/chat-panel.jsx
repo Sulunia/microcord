@@ -24,6 +24,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
   const contentRef = useRef(null);
   const prevCountRef = useRef(0);
   const wasAtBottomRef = useRef(true);
+  const bottomRef = useRef(null);
   const panelRef = useRef(null);
   const initialLoadDone = useRef(false);
   const scrollAnchorRef = useRef(null);
@@ -65,7 +66,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
     if (!initialLoadDone.current && newCount > 0) {
       initialLoadDone.current = true;
       requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
+        bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'instant' });
       });
       return;
     }
@@ -83,7 +84,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
 
     if (!wasAtBottomRef.current) return;
 
-    el.scrollTop = el.scrollHeight;
+    bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'instant' });
   }, [messages.length]);
 
   useEffect(() => {
@@ -103,7 +104,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
     if (!el || !content) return;
     const observer = new ResizeObserver(() => {
       if (wasAtBottomRef.current) {
-        el.scrollTop = el.scrollHeight;
+        bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'instant' });
       }
     });
     observer.observe(content);
@@ -184,6 +185,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
         <div class={`${styles.messageList} has-scrollbar`} ref={listRef} onScroll={onScroll}>
           <div ref={contentRef} class={styles.messageContent}>
             {renderedMessages}
+            <div ref={bottomRef} />
           </div>
         </div>
         <MessageInput onSend={sendMessage} />

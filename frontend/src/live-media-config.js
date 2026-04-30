@@ -1,4 +1,4 @@
-import { authHeaders } from './hooks/use-user.js';
+import { authedFetch } from './hooks/use-user.js';
 
 const API_BASE = '/api';
 
@@ -34,7 +34,7 @@ export async function initLiveMediaConfig() {
     if (_initPromise) return _initPromise;
     _initPromise = (async () => {
         try {
-            const res = await fetch(`${API_BASE}/livemediaconfig`, { headers: authHeaders() });
+            const res = await authedFetch(`${API_BASE}/livemediaconfig`);
             if (!res.ok) return;
             const data = await res.json();
             if (data.ice_servers) config.iceServers = data.ice_servers;

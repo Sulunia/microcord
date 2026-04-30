@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { API_BASE, WS_URL, CHAT_PAGE_SIZE, TICK_SOUNDS } from '../constants.js';
-import { authHeaders } from './use-user.js';
+import { authedFetch } from './use-user.js';
 
 const audioCache = {};
 function getTickAudio(tickSound) {
@@ -36,7 +36,7 @@ export function useChat(user) {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/users`, { headers: authHeaders() });
+      const res = await authedFetch(`${API_BASE}/users`);
       if (!res.ok) return;
       const list = await res.json();
       const map = {};
@@ -51,7 +51,7 @@ export function useChat(user) {
     try {
       const params = new URLSearchParams({ limit: String(CHAT_PAGE_SIZE) });
       if (cursor) params.set('cursor', cursor);
-      const res = await fetch(`${API_BASE}/messages?${params}`, { headers: authHeaders() });
+      const res = await authedFetch(`${API_BASE}/messages?${params}`);
       if (!res.ok) return;
       const data = await res.json();
       const batch = data.messages || [];
@@ -76,9 +76,8 @@ export function useChat(user) {
     const u = userRef.current;
     if (!u) return;
     try {
-      const res = await fetch(`${API_BASE}/auth/ws-ticket`, {
+      const res = await authedFetch(`${API_BASE}/auth/ws-ticket`, {
         method: 'POST',
-        headers: authHeaders(),
       });
       if (!res.ok) {
         reconnectTimer.current = setTimeout(connectWs, 2000);
@@ -184,9 +183,8 @@ export function useChat(user) {
     if (imageFile) {
       const form = new FormData();
       form.append('file', imageFile);
-      const uploadRes = await fetch(`${API_BASE}/upload`, {
+      const uploadRes = await authedFetch(`${API_BASE}/upload`, {
         method: 'POST',
-        headers: authHeaders(),
         body: form,
       });
       if (!uploadRes.ok) throw new Error('Upload failed');
@@ -196,9 +194,9 @@ export function useChat(user) {
 
     if (!text.trim() && !image_url) return;
 
-    const res = await fetch(`${API_BASE}/messages`, {
+    const res = await authedFetch(`${API_BASE}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: text, image_url }),
     });
 
@@ -215,9 +213,8 @@ export function useChat(user) {
   }, []);
 
   const deleteMessage = useCallback(async (messageId) => {
-    const res = await fetch(`${API_BASE}/messages/${messageId}`, {
+    const res = await authedFetch(`${API_BASE}/messages/${messageId}`, {
       method: 'DELETE',
-      headers: authHeaders(),
     });
     if (res.ok) {
       const { id } = await res.json();

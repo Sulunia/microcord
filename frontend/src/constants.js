@@ -9,8 +9,9 @@ export const TIMESTAMP_TODAY_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 export const USER_STORAGE_KEY = 'microcord_user';
 export const TOKEN_STORAGE_KEY = 'microcord_token';
+export const REFRESH_TOKEN_STORAGE_KEY = 'microcord_refresh_token';
 
-export const APP_VERSION = '0.7.3';
+export const APP_VERSION = '0.8.1';
 
 export const CHAT_PAGE_SIZE = 30;
 

@@ -102,6 +102,9 @@ class Guard:
     def check_upload(self, user_id: str) -> float | None:
         return self.check(f"rl:upload:{user_id}", max_hits=5, window=60, max_backoff=120)
 
+    def check_refresh(self, user_id: str) -> float | None:
+        return self.check(f"rl:refresh:{user_id}", max_hits=10, window=60, max_backoff=120)
+
     def verify_passphrase(self, provided: str) -> bool:
         if not provided:
             return False

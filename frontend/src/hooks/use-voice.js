@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
 import { API_BASE, LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
-import { authHeaders } from './use-user.js';
+import { authedFetch } from './use-user.js';
 
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 const DEFAULT_AUDIO_CONFIG = {
@@ -170,7 +170,7 @@ export function useVoice(user, wsRef) {
 
     const fetchParticipants = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/voice/participants`, { headers: authHeaders() });
+            const res = await authedFetch(`${API_BASE}/voice/participants`);
             if (res.ok) setParticipants(await res.json());
         } catch { /* ignore */ }
     }, []);
@@ -399,9 +399,9 @@ export function useVoice(user, wsRef) {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
             streamRef.current = stream;
 
-            const res = await fetch(`${API_BASE}/voice/join`, {
+            const res = await authedFetch(`${API_BASE}/voice/join`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
             });
             if (!res.ok) throw new Error('Join failed');
@@ -429,9 +429,9 @@ export function useVoice(user, wsRef) {
 
         cleanup();
 
-        await fetch(`${API_BASE}/voice/leave`, {
+        await authedFetch(`${API_BASE}/voice/leave`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
         }).catch(() => {});
 

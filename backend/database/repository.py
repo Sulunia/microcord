@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 
 from sqlalchemy import select, or_, and_
 from sqlalchemy import event
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from constants import DB_URL
 from database.models import (
-    Base, User, Message,
+    Base, User, Message, RefreshToken,
     _enable_wal, _migrate_columns, _migrate_indexes,
 )
 
@@ -205,6 +206,72 @@ class BackendRepository:
             await session.refresh(msg, attribute_names=["author"])
             return msg
 
+        return await self._enqueue_write(_write)
+
+    async def store_refresh_token(self, user_id: str, token_hash: str, expires_at) -> RefreshToken:
+        async def _write(session):
+            rt = RefreshToken(user_id=user_id, token_hash=token_hash, expires_at=expires_at)
+            session.add(rt)
+            await session.flush()
+            await session.refresh(rt)
+            return rt
+
+        return await self._enqueue_write(_write)
+
+    async def get_refresh_token_by_hash(self, token_hash: str) -> RefreshToken | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+            )
+            return result.scalar_one_or_none()
+
+    async def consume_refresh_token(self, token_id: str) -> None:
+        async def _write(session):
+            result = await session.execute(
+                select(RefreshToken).where(RefreshToken.id == token_id)
+            )
+            rt = result.scalar_one_or_none()
+            if rt:
+                rt.consumed = True
+        return await self._enqueue_write(_write)
+
+    async def revoke_refresh_token(self, token_id: str) -> None:
+        async def _write(session):
+            result = await session.execute(
+                select(RefreshToken).where(RefreshToken.id == token_id)
+            )
+            rt = result.scalar_one_or_none()
+            if rt:
+                rt.revoked_at = datetime.utcnow()
+        return await self._enqueue_write(_write)
+
+    async def revoke_all_refresh_tokens_for_user(self, user_id: str) -> None:
+        async def _write(session):
+            now = datetime.utcnow()
+            result = await session.execute(
+                select(RefreshToken).where(
+                    RefreshToken.user_id == user_id,
+                    RefreshToken.revoked_at.is_(None),
+                )
+            )
+            for rt in result.scalars().all():
+                rt.revoked_at = now
+        return await self._enqueue_write(_write)
+
+    async def prune_expired_refresh_tokens(self) -> int:
+        async def _write(session):
+            now = datetime.utcnow()
+            result = await session.execute(
+                select(RefreshToken).where(
+                    RefreshToken.expires_at < now,
+                    RefreshToken.revoked_at.isnot(None),
+                )
+            )
+            rows = result.scalars().all()
+            count = len(rows)
+            for rt in rows:
+                await session.delete(rt)
+            return count
         return await self._enqueue_write(_write)
 
 
