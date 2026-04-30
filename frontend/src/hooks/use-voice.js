@@ -133,8 +133,8 @@ export function useVoice(user) {
         vadAnalyserRef.current = analyser;
 
         const data = new Uint8Array(analyser.fftSize);
-        const RISING_DEBOUNCE_MS = 25;
-        const FALLING_DEBOUNCE_MS = 120;
+        const RISING_DEBOUNCE_MS = 22;
+        const FALLING_DEBOUNCE_MS = 180;
 
         const tick = () => {
             analyser.getByteTimeDomainData(data);
