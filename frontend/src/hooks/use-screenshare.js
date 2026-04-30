@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { LIVE_MEDIA_CONFIG } from '../constants.js';
 import { useRealtime } from './realtime.jsx';
 import { createPeerMap } from './webrtc-helpers.js';
+import { useLatest } from './use-latest.js';
+import { useLiveMediaConfig } from './use-live-media-config.js';
 
-function getDisplayConstraints() {
-    const screenshareConfig = LIVE_MEDIA_CONFIG.screenshare;
+function getDisplayConstraints(screenshareConfig) {
     return {
         video: {
             width: { ideal: screenshareConfig.width },
@@ -23,17 +23,17 @@ export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
 
     const localStreamRef = useRef(null);
     const peerMapRef = useRef(null);
-    const userRef = useRef(user);
     const suppressSharerSyncRef = useRef(false);
 
     const { send, subscribe, connected } = useRealtime();
+    const { iceServers, screenshareConfig } = useLiveMediaConfig();
 
-    useEffect(() => { userRef.current = user; }, [user]);
+    const userRef = useLatest(user);
 
     function getPeerMap() {
         if (!peerMapRef.current) {
             peerMapRef.current = createPeerMap(() => ({
-                iceServers: LIVE_MEDIA_CONFIG.iceServers,
+                iceServers,
                 sendSignal: (targetId, signal) =>
                     send('screenshare_signal', { target: targetId, signal }),
             }));
@@ -88,7 +88,7 @@ export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
         if (!currentUser || !isVoiceJoined || isSharing) return;
         if (sharerUserId) return;
         try {
-            const stream = await navigator.mediaDevices.getDisplayMedia(getDisplayConstraints());
+            const stream = await navigator.mediaDevices.getDisplayMedia(getDisplayConstraints(screenshareConfig));
             localStreamRef.current = stream;
 
             stream.getVideoTracks()[0]?.addEventListener('ended', () => {
@@ -115,7 +115,7 @@ export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
             cleanupLocalStream();
             cleanupPeerConnections();
         }
-    }, [isVoiceJoined, isSharing, sharerUserId, connected, send, voiceParticipants, stopSharing, cleanupLocalStream, cleanupPeerConnections, sharerOnCreated]);
+    }, [isVoiceJoined, isSharing, sharerUserId, connected, send, voiceParticipants, stopSharing, cleanupLocalStream, cleanupPeerConnections, sharerOnCreated, screenshareConfig, userRef]);
 
     const stopViewing = useCallback(() => {
         cleanupPeerConnections();
@@ -173,7 +173,7 @@ export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
             }),
         ];
         return () => unsubs.forEach((unsub) => unsub());
-    }, [subscribe, cleanupPeerConnections, cleanupLocalStream, sharerOnCreated]);
+    }, [subscribe, cleanupPeerConnections, cleanupLocalStream, sharerOnCreated, userRef]);
 
     useEffect(() => {
         if (!isVoiceJoined && isSharing) {

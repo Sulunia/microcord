@@ -1,21 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { API_BASE, LIVE_MEDIA_CONFIG, initLiveMediaConfig, AUDIO_OUTPUT_KEY } from '../constants.js';
+import { API_BASE, AUDIO_OUTPUT_KEY } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { createPeerMap } from './webrtc-helpers.js';
 import { useAudioPreferences } from './use-audio-preferences.js';
-import { startVadMonitor, computeVadThreshold } from './vad-monitor.js';
-
-export { computeVadThreshold };
-
-const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-const DEFAULT_AUDIO_CONFIG = {
-    echo_cancellation: true,
-    noise_suppression: true,
-    auto_gain_control: true,
-    opus_bitrate: 32000,
-    opus_stereo: false,
-};
+import { startVadMonitor } from './vad-monitor.js';
+import { useLatest } from './use-latest.js';
+import { useLiveMediaConfig } from './use-live-media-config.js';
+import { playNotification, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from './audio-notifications.js';
 
 function ensureAudioPlay(audio) {
     const playPromise = audio.play();
@@ -33,14 +25,6 @@ function ensureAudioPlay(audio) {
     });
 }
 
-/**
- * Munge an SDP description to apply Opus codec parameters.
- *
- * @param {string} sdp
- * @param {number} bitrate — maxaveragebitrate (6000–510000)
- * @param {boolean} stereo
- * @returns {string} Munged SDP
- */
 function mungeOpusSdp(sdp, bitrate, stereo) {
     const match = sdp.match(/a=rtpmap:(\d+) opus\/48000/);
     if (!match) return sdp;
@@ -71,14 +55,17 @@ function mungeOpusSdp(sdp, bitrate, stereo) {
 }
 
 /**
- * Voice-channel hook.
+ * Voice-channel hook with centralised cleanup ownership.
  *
- * Join/leave lifecycle is modelled as a small state machine:
+ * Lifecycle is a small state machine:
  *   `idle` → `joining` → `joined` → `leaving` → `idle`
  *                      ↘ `error` → `idle`
  *
- * If the backend join succeeds but later local setup (VAD, WebRTC offers)
- * fails, the hook rolls back by calling `POST /voice/leave`.
+ * Cleanup is consolidated into four ownership functions:
+ *   - `disposePeer(userId)`  — single peer + its audio element + sender
+ *   - `disposeAllPeers()`    — all peers + audio elements + senders
+ *   - `disposeLocalVoice()`  — mic stream + VAD monitor
+ *   - `resetVoiceState()`    — resets React state to idle defaults
  *
  * @param {{ id: string } | null} user
  */
@@ -93,35 +80,24 @@ export function useVoice(user) {
     const peerMapRef = useRef(null);
     const audioSendersRef = useRef(new Map());
     const audioElementsRef = useRef(new Map());
-    const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
-    const audioConfigRef = useRef(DEFAULT_AUDIO_CONFIG);
-    const userRef = useRef(user);
-    const joinStateRef = useRef('idle');
     const vadMonitorRef = useRef(null);
     const vadSpeakingRef = useRef(false);
-    const isMutedRef = useRef(false);
 
     const isJoined = joinState === 'joined';
 
     const { prefsRef } = useAudioPreferences();
+    const { iceServers, audioConfig } = useLiveMediaConfig();
 
-    useEffect(() => { userRef.current = user; }, [user]);
-    useEffect(() => { joinStateRef.current = joinState; }, [joinState]);
-    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+    const userRef = useLatest(user);
+    const joinStateRef = useLatest(joinState);
+    const isMutedRef = useLatest(isMuted);
 
     const { send, subscribe } = useRealtime();
-
-    useEffect(() => {
-        initLiveMediaConfig().then(() => {
-            iceServersRef.current = LIVE_MEDIA_CONFIG.iceServers;
-            audioConfigRef.current = LIVE_MEDIA_CONFIG.audio;
-        });
-    }, []);
 
     function getPeerMap() {
         if (!peerMapRef.current) {
             peerMapRef.current = createPeerMap(() => ({
-                iceServers: iceServersRef.current,
+                iceServers,
                 sendSignal: (targetId, signal) =>
                     send('voice_signal', { target: targetId, signal }),
             }));
@@ -165,7 +141,7 @@ export function useVoice(user) {
                 }
             },
         });
-    }, [send, stopVad, gateAudioToPeers, prefsRef]);
+    }, [send, stopVad, gateAudioToPeers, prefsRef, isMutedRef]);
 
     const fetchParticipants = useCallback(async () => {
         try {
@@ -177,9 +153,8 @@ export function useVoice(user) {
     useEffect(() => { fetchParticipants(); }, [fetchParticipants]);
 
     const mungeSdp = useCallback((sdp) => {
-        const config = audioConfigRef.current;
-        return mungeOpusSdp(sdp, config.opus_bitrate, config.opus_stereo);
-    }, []);
+        return mungeOpusSdp(sdp, audioConfig.opus_bitrate, audioConfig.opus_stereo);
+    }, [audioConfig]);
 
     const voiceOnCreated = useCallback((peerConnection, targetId) => {
         const stream = streamRef.current;
@@ -216,9 +191,23 @@ export function useVoice(user) {
                 audioElementsRef.current.set(targetId, { audio, volume: 1.0 });
             }
         };
+    }, [isMutedRef]);
+
+    // ── Centralised cleanup ownership ────────────────────────────────
+
+    const disposePeer = useCallback((userId) => {
+        getPeerMap().closePeer(userId);
+        audioSendersRef.current.delete(userId);
+        const entry = audioElementsRef.current.get(userId);
+        if (entry) {
+            entry.audio.pause();
+            entry.audio.srcObject = null;
+            if (entry.audio.parentNode) entry.audio.parentNode.removeChild(entry.audio);
+            audioElementsRef.current.delete(userId);
+        }
     }, []);
 
-    const cleanupPeerConnections = useCallback(() => {
+    const disposeAllPeers = useCallback(() => {
         peerMapRef.current?.closeAllPeers();
         audioSendersRef.current.clear();
         audioElementsRef.current.forEach(({ audio }) => {
@@ -229,15 +218,25 @@ export function useVoice(user) {
         audioElementsRef.current.clear();
     }, []);
 
-    const cleanup = useCallback(() => {
+    const disposeLocalVoice = useCallback(() => {
         stopVad();
-        cleanupPeerConnections();
         streamRef.current?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
+    }, [stopVad]);
+
+    const resetVoiceState = useCallback(() => {
         setIsMuted(false);
         setIsSpeaking(false);
         setSpeakingUsers(new Map());
-    }, [cleanupPeerConnections, stopVad]);
+    }, []);
+
+    const cleanup = useCallback(() => {
+        disposeLocalVoice();
+        disposeAllPeers();
+        resetVoiceState();
+    }, [disposeLocalVoice, disposeAllPeers, resetVoiceState]);
+
+    // ── Effects ──────────────────────────────────────────────────────
 
     useEffect(() => cleanup, [cleanup]);
 
@@ -252,28 +251,15 @@ export function useVoice(user) {
         const unsubs = [
             subscribe('voice_participant_joined', () => {
                 if (joinStateRef.current === 'joined') {
-                    const enterAudio = new Audio('/sounds/EnterVoice.wav');
-                    enterAudio.volume = 0.7;
-                    enterAudio.play().catch(() => {});
+                    playNotification(SOUND_ENTER_VOICE, 0.7);
                 }
                 fetchParticipants();
             }),
             subscribe('voice_participant_left', (data) => {
                 if (joinStateRef.current === 'joined') {
-                    const exitAudio = new Audio('/sounds/ExitVoice.wav');
-                    exitAudio.volume = 0.55;
-                    exitAudio.play().catch(() => {});
+                    playNotification(SOUND_EXIT_VOICE, 0.55);
                 }
-                const leftUserId = data.user_id;
-                getPeerMap().closePeer(leftUserId);
-                audioSendersRef.current.delete(leftUserId);
-                const entry = audioElementsRef.current.get(leftUserId);
-                if (entry) {
-                    entry.audio.pause();
-                    entry.audio.srcObject = null;
-                    if (entry.parentNode) entry.parentNode.removeChild(entry.audio);
-                    audioElementsRef.current.delete(leftUserId);
-                }
+                disposePeer(data.user_id);
                 fetchParticipants();
             }),
             subscribe('voice_signal', (data) => {
@@ -306,7 +292,9 @@ export function useVoice(user) {
             subscribe('user_updated', () => fetchParticipants()),
         ];
         return () => unsubs.forEach((unsub) => unsub());
-    }, [subscribe, fetchParticipants, voiceOnCreated, mungeSdp]);
+    }, [subscribe, fetchParticipants, voiceOnCreated, mungeSdp, disposePeer, joinStateRef]);
+
+    // ── Actions ──────────────────────────────────────────────────────
 
     const join = useCallback(async () => {
         const currentUser = userRef.current;
@@ -316,12 +304,11 @@ export function useVoice(user) {
         let backendJoined = false;
 
         try {
-            const config = audioConfigRef.current;
             const inputDeviceId = prefsRef.current.inputDevice;
             const audioConstraints = {
-                echoCancellation: config.echo_cancellation,
-                noiseSuppression: config.noise_suppression,
-                autoGainControl: config.auto_gain_control,
+                echoCancellation: audioConfig.echo_cancellation,
+                noiseSuppression: audioConfig.noise_suppression,
+                autoGainControl: audioConfig.auto_gain_control,
                 ...(inputDeviceId ? { deviceId: { exact: inputDeviceId } } : {}),
             };
             const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
@@ -362,7 +349,7 @@ export function useVoice(user) {
             }
             setJoinState('idle');
         }
-    }, [cleanup, startVad, voiceOnCreated, mungeSdp, prefsRef]);
+    }, [cleanup, startVad, voiceOnCreated, mungeSdp, prefsRef, audioConfig, userRef, joinStateRef]);
 
     const leave = useCallback(async () => {
         const currentUser = userRef.current;
@@ -379,7 +366,7 @@ export function useVoice(user) {
 
         setJoinState('idle');
         await fetchParticipants();
-    }, [fetchParticipants, cleanup]);
+    }, [fetchParticipants, cleanup, userRef]);
 
     const toggleMute = useCallback(() => {
         setIsMuted((prev) => {

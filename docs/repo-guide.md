@@ -78,7 +78,7 @@ microcord/
 │   └── src/
 │       ├── main.jsx            # Mount <App />, import global styles
 │       ├── app.jsx             # Shell: login vs main window, <RealtimeProvider> wrapper, <AuthenticatedApp> with hook composition, resizable sidebar, toggleable members sidebar
-│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
+│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size, notification sound constants; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
 │       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
 │       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
 │       ├── hooks/
@@ -86,9 +86,12 @@ microcord/
 │       │   ├── webrtc-helpers.js   # createPeerMap() factory — shared peer-connection map with closePeer, closeAllPeers, sendOffer, applySignal
 │       │   ├── vad-monitor.js      # startVadMonitor(stream, { prefsRef, onSpeakingChange }) — reusable RMS-based VAD; returns { stop }
 │       │   ├── use-audio-preferences.js # useAudioPreferences() — reactive localStorage-backed audio prefs (input/output/vadSensitivity) with prefsRef for hot loops
+│       │   ├── audio-notifications.js # playNotification(url, volume) — cached notification sound playback; SOUND_ENTER_VOICE / SOUND_EXIT_VOICE constants
+│       │   ├── use-latest.js       # useLatest(value) — returns a stable ref that always holds the latest value (replaces manual ref-mirror pattern)
+│       │   ├── use-live-media-config.js # useLiveMediaConfig() — initialises LIVE_MEDIA_CONFIG once, exposes iceServers / audioConfig / screenshareConfig
 │       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
 │       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs)
-│       │   ├── use-voice.js        # Voice join/leave (state machine: idle→joining→joined→leaving→idle), mute toggle, VAD via startVadMonitor, WebRTC mesh via createPeerMap, DOM-attached <audio> elements
+│       │   ├── use-voice.js        # Voice join/leave (state machine: idle→joining→joined→leaving→idle), mute toggle, VAD via startVadMonitor, WebRTC mesh via createPeerMap, centralised cleanup (disposePeer/disposeAllPeers/disposeLocalVoice/resetVoiceState)
 │       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
 │       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
 │       ├── components/

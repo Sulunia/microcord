@@ -2,22 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { API_BASE, CHAT_PAGE_SIZE, TICK_SOUNDS } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
+import { useLatest } from './use-latest.js';
+import { playNotification } from './audio-notifications.js';
 
-const audioCache = {};
-function getTickAudio(tickSound) {
-  const id = tickSound ?? 1;
-  if (!audioCache[id]) {
-    const s = TICK_SOUNDS.find((t) => t.id === id);
-    audioCache[id] = new Audio(s ? s.url : TICK_SOUNDS[0].url);
-    audioCache[id].volume = 0.7;
-  }
-  return audioCache[id];
+function tickUrl(id) {
+  const s = TICK_SOUNDS.find((t) => t.id === id);
+  return s ? s.url : TICK_SOUNDS[0].url;
 }
 
 function playTick(tickSound) {
-  const a = getTickAudio(tickSound);
-  a.currentTime = 0;
-  a.play().catch(() => {});
+  playNotification(tickUrl(tickSound), 0.7);
 }
 
 export function useChat(user) {
@@ -27,9 +21,7 @@ export function useChat(user) {
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
   const loadingRef = useRef(false);
   const nextCursorRef = useRef(null);
-  const userRef = useRef(user);
-
-  useEffect(() => { userRef.current = user; }, [user]);
+  const userRef = useLatest(user);
 
   const userId = user?.id;
 

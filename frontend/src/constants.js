@@ -1,5 +1,6 @@
 export { default as UI_CONFIG } from './runtime-config.js';
 export { default as LIVE_MEDIA_CONFIG, initLiveMediaConfig } from './live-media-config.js';
+export { SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from './hooks/audio-notifications.js';
 
 export const API_BASE = '/api';
 export const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;

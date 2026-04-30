@@ -5,6 +5,7 @@ import { AlertModal } from '../alert-modal.jsx';
 import { useTheme } from '../../hooks/use-theme.js';
 import { useAudioPreferences } from '../../hooks/use-audio-preferences.js';
 import { startVadMonitor } from '../../hooks/vad-monitor.js';
+import { playNotification } from '../../hooks/audio-notifications.js';
 
 const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
 const AVATAR_ACCEPT = 'image/jpeg,image/png,image/avif';
@@ -32,7 +33,6 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
   } = useAudioPreferences();
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
-  const tickAudioRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -251,16 +251,10 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                       name="tick_sound"
                       value={t.id}
                       checked={selectedTick === t.id}
-                      onChange={() => {
-                        setSelectedTick(t.id);
-                        if (tickAudioRef.current) {
-                          tickAudioRef.current.pause();
-                          tickAudioRef.current.currentTime = 0;
-                        }
-                        const a = new Audio(t.url);
-                        tickAudioRef.current = a;
-                        a.play().catch(() => {});
-                      }}
+                        onChange={() => {
+                          setSelectedTick(t.id);
+                          playNotification(t.url, 0.7);
+                        }}
                     />
                     <label for={`tick-${t.id}`}>{t.label}</label>
                   </div>

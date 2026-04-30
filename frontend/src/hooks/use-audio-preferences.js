@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
+import { useState, useCallback, useRef } from 'preact/hooks';
 import { AUDIO_INPUT_KEY, AUDIO_OUTPUT_KEY, VAD_SENSITIVITY_KEY } from '../constants.js';
+import { useLatest } from './use-latest.js';
 
 /**
  * Reactive audio preferences backed by localStorage.
@@ -16,10 +17,7 @@ export function useAudioPreferences() {
         () => parseInt(localStorage.getItem(VAD_SENSITIVITY_KEY), 10) || 50,
     );
 
-    const prefsRef = useRef({ inputDevice, outputDevice, vadSensitivity });
-    useEffect(() => {
-        prefsRef.current = { inputDevice, outputDevice, vadSensitivity };
-    }, [inputDevice, outputDevice, vadSensitivity]);
+    const prefsRef = useLatest({ inputDevice, outputDevice, vadSensitivity });
 
     const setInput = useCallback((deviceId) => {
         localStorage.setItem(AUDIO_INPUT_KEY, deviceId);
