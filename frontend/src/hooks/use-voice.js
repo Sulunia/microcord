@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { API_BASE, AUDIO_OUTPUT_KEY } from '../constants.js';
+import { API_BASE, AUDIO_OUTPUT_KEY, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { createPeerMap } from './webrtc-helpers.js';
@@ -7,7 +7,7 @@ import { useAudioPreferences } from './use-audio-preferences.js';
 import { startVadMonitor } from './vad-monitor.js';
 import { useLatest } from './use-latest.js';
 import { useLiveMediaConfig } from './use-live-media-config.js';
-import { playNotification, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from './audio-notifications.js';
+import { playNotification } from './audio-notifications.js';
 
 function ensureAudioPlay(audio) {
     const playPromise = audio.play();

@@ -1,6 +1,5 @@
 export { default as UI_CONFIG } from './runtime-config.js';
 export { default as LIVE_MEDIA_CONFIG, initLiveMediaConfig } from './live-media-config.js';
-export { SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from './hooks/audio-notifications.js';
 
 export const API_BASE = '/api';
 export const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
@@ -19,6 +18,9 @@ export const VAD_SENSITIVITY_KEY = 'mc-vad-sensitivity';
 export const APP_VERSION = '0.8.3';
 
 export const CHAT_PAGE_SIZE = 30;
+
+export const SOUND_ENTER_VOICE = '/sounds/EnterVoice.wav';
+export const SOUND_EXIT_VOICE = '/sounds/ExitVoice.wav';
 
 export const TICK_SOUNDS = [
   { id: 1, label: 'Tap', url: '/sounds/tick1.mp3' },

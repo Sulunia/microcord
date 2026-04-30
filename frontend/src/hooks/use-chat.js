@@ -1,14 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
-import { API_BASE, CHAT_PAGE_SIZE, TICK_SOUNDS } from '../constants.js';
+import { API_BASE, CHAT_PAGE_SIZE } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { useLatest } from './use-latest.js';
-import { playNotification } from './audio-notifications.js';
-
-function tickUrl(id) {
-  const s = TICK_SOUNDS.find((t) => t.id === id);
-  return s ? s.url : TICK_SOUNDS[0].url;
-}
+import { playNotification, tickUrl } from './audio-notifications.js';
 
 function playTick(tickSound) {
   playNotification(tickUrl(tickSound), 0.7);
