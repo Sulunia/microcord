@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'preact';
-import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
+import { createContext } from 'preact';
+import { useState, useEffect, useCallback, useRef, useContext } from 'preact/hooks';
 import { API_BASE, WS_URL } from '../constants.js';
 import { authedFetch } from './use-user.js';
 
