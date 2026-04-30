@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
-import { API_BASE, WS_URL, CHAT_PAGE_SIZE, TICK_SOUNDS } from '../constants.js';
+import { API_BASE, CHAT_PAGE_SIZE, TICK_SOUNDS } from '../constants.js';
 import { authedFetch } from './use-user.js';
+import { useRealtime } from './realtime.jsx';
 
 const audioCache = {};
 function getTickAudio(tickSound) {
@@ -8,7 +9,7 @@ function getTickAudio(tickSound) {
   if (!audioCache[id]) {
     const s = TICK_SOUNDS.find((t) => t.id === id);
     audioCache[id] = new Audio(s ? s.url : TICK_SOUNDS[0].url);
-    audioCache[id].volume = id <= 3 ? 0.7 : 0.7;
+    audioCache[id].volume = 0.7;
   }
   return audioCache[id];
 }
@@ -25,14 +26,14 @@ export function useChat(user) {
   const [usersMap, setUsersMap] = useState({});
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
   const loadingRef = useRef(false);
-  const wsRef = useRef(null);
-  const reconnectTimer = useRef(null);
-  const userRef = useRef(user);
   const nextCursorRef = useRef(null);
+  const userRef = useRef(user);
 
   useEffect(() => { userRef.current = user; }, [user]);
 
   const userId = user?.id;
+
+  const { subscribe } = useRealtime();
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -42,7 +43,7 @@ export function useChat(user) {
       const map = {};
       for (const u of list) map[u.id] = u;
       setUsersMap(map);
-    } catch { /* ignore */ }
+    } catch {}
   }, []);
 
   const fetchMessages = useCallback(async (cursor = null) => {
@@ -62,7 +63,7 @@ export function useChat(user) {
       } else {
         setMessages(batch);
       }
-    } catch { /* ignore */ } finally {
+    } catch {} finally {
       loadingRef.current = false;
     }
   }, []);
@@ -72,108 +73,82 @@ export function useChat(user) {
     fetchMessages(nextCursorRef.current);
   }, [hasMore, fetchMessages]);
 
-  const connectWs = useCallback(async () => {
-    const u = userRef.current;
-    if (!u) return;
-    try {
-      const res = await authedFetch(`${API_BASE}/auth/ws-ticket`, {
-        method: 'POST',
-      });
-      if (!res.ok) {
-        reconnectTimer.current = setTimeout(connectWs, 2000);
-        return;
-      }
-      const { ticket } = await res.json();
-      const ws = new WebSocket(`${WS_URL}?ticket=${ticket}`);
-
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === 'chat_message') {
-            const author = msg.data?.author;
-            if (author?.id) {
-              setUsersMap((prev) => ({ ...prev, [author.id]: author }));
-            }
-            setMessages((prev) => {
-              const existing = prev.findIndex((m) => m.id === msg.data?.id);
-              if (existing >= 0) {
-                const updated = [...prev];
-                updated[existing] = msg.data;
-                return updated;
-              }
-              return [...prev, msg.data];
-            });
-            const authorId = author?.id;
-            const currentId = userRef.current?.id;
-            if (authorId && authorId !== currentId) {
-              playTick(author?.tick_sound);
-            }
-          } else if (msg.type === 'chat_message_deleted') {
-            const deletedId = msg.data?.id;
-            if (deletedId) {
-              setMessages((prev) => prev.filter((m) => m.id !== deletedId));
-            }
-          } else if (msg.type === 'user_updated') {
-            const updatedUser = msg.data?.user;
-            if (updatedUser?.id) {
-              setUsersMap((prev) => ({ ...prev, [updatedUser.id]: updatedUser }));
-            }
-          } else if (msg.type === 'presence_init') {
-            const ids = msg.data?.user_ids;
-            if (Array.isArray(ids)) {
-              setOnlineUserIds(new Set(ids));
-            }
-          } else if (msg.type === 'presence_online') {
-            const uid = msg.data?.user_id;
-            const onlineUser = msg.data?.user;
-            if (uid) {
-              setOnlineUserIds((prev) => {
-                const next = new Set(prev);
-                next.add(uid);
-                return next;
-              });
-              if (onlineUser?.id) {
-                setUsersMap((prev) => {
-                  if (prev[onlineUser.id]) return prev;
-                  return { ...prev, [onlineUser.id]: onlineUser };
-                });
-              }
-            }
-          } else if (msg.type === 'presence_offline') {
-            const uid = msg.data?.user_id;
-            if (uid) {
-              setOnlineUserIds((prev) => {
-                const next = new Set(prev);
-                next.delete(uid);
-                return next;
-              });
-            }
+  useEffect(() => {
+    const unsubs = [
+      subscribe('chat_message', (data) => {
+        const author = data?.author;
+        if (author?.id) {
+          setUsersMap((prev) => ({ ...prev, [author.id]: author }));
+        }
+        setMessages((prev) => {
+          const existing = prev.findIndex((m) => m.id === data?.id);
+          if (existing >= 0) {
+            const updated = [...prev];
+            updated[existing] = data;
+            return updated;
           }
-        } catch { /* ignore malformed */ }
-      };
-
-      ws.onclose = () => {
-        reconnectTimer.current = setTimeout(connectWs, 2000);
-      };
-
-      wsRef.current = ws;
-    } catch {
-      reconnectTimer.current = setTimeout(connectWs, 2000);
-    }
-  }, []);
+          return [...prev, data];
+        });
+        const authorId = author?.id;
+        const currentId = userRef.current?.id;
+        if (authorId && authorId !== currentId) {
+          playTick(author?.tick_sound);
+        }
+      }),
+      subscribe('chat_message_deleted', (data) => {
+        const deletedId = data?.id;
+        if (deletedId) {
+          setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+        }
+      }),
+      subscribe('user_updated', (data) => {
+        const updatedUser = data?.user;
+        if (updatedUser?.id) {
+          setUsersMap((prev) => ({ ...prev, [updatedUser.id]: updatedUser }));
+        }
+      }),
+      subscribe('presence_init', (data) => {
+        const ids = data?.user_ids;
+        if (Array.isArray(ids)) {
+          setOnlineUserIds(new Set(ids));
+        }
+      }),
+      subscribe('presence_online', (data) => {
+        const uid = data?.user_id;
+        const onlineUser = data?.user;
+        if (uid) {
+          setOnlineUserIds((prev) => {
+            const next = new Set(prev);
+            next.add(uid);
+            return next;
+          });
+          if (onlineUser?.id) {
+            setUsersMap((prev) => {
+              if (prev[onlineUser.id]) return prev;
+              return { ...prev, [onlineUser.id]: onlineUser };
+            });
+          }
+        }
+      }),
+      subscribe('presence_offline', (data) => {
+        const uid = data?.user_id;
+        if (uid) {
+          setOnlineUserIds((prev) => {
+            const next = new Set(prev);
+            next.delete(uid);
+            return next;
+          });
+        }
+      }),
+    ];
+    return () => unsubs.forEach((fn) => fn());
+  }, [subscribe]);
 
   useEffect(() => {
     if (!userId) return;
-
     fetchUsers();
     fetchMessages();
-    connectWs();
-
-    return () => {
-      clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
-    };
-  }, [userId, connectWs, fetchMessages, fetchUsers]);
+  }, [userId, fetchMessages, fetchUsers]);
 
   const sendMessage = useCallback(async (text, imageFile = null) => {
     const u = userRef.current;
@@ -188,8 +163,8 @@ export function useChat(user) {
         body: form,
       });
       if (!uploadRes.ok) throw new Error('Upload failed');
-      const data = await uploadRes.json();
-      image_url = data.url;
+      const uploadData = await uploadRes.json();
+      image_url = uploadData.url;
     }
 
     if (!text.trim() && !image_url) return;
@@ -227,5 +202,5 @@ export function useChat(user) {
     author: m.author || usersMap[m.author_id] || null,
   }));
 
-  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, ws: wsRef, usersMap, onlineUserIds };
+  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, usersMap, onlineUserIds };
 }
