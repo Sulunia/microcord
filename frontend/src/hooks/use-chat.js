@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { API_BASE, CHAT_PAGE_SIZE, TICK_SOUNDS } from '../constants.js';
 import { authedFetch } from './use-user.js';
-import { useRealtime } from './realtime.js';
+import { useRealtime } from './realtime.jsx';
 
 const audioCache = {};
 function getTickAudio(tickSound) {

@@ -7,7 +7,7 @@ import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
-import { RealtimeProvider } from './hooks/realtime.js';
+import { RealtimeProvider } from './hooks/realtime.jsx';
 import { UI_CONFIG } from './constants.js';
 import styles from './app.module.css';
 

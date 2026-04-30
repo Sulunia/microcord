@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
 import { API_BASE, LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
 import { authedFetch } from './use-user.js';
-import { useRealtime } from './realtime.js';
+import { useRealtime } from './realtime.jsx';
 
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 const DEFAULT_AUDIO_CONFIG = {

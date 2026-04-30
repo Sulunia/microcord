@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
 import { LIVE_MEDIA_CONFIG } from '../constants.js';
-import { useRealtime } from './realtime.js';
+import { useRealtime } from './realtime.jsx';
 
 function getDisplayConstraints() {
     const s = LIVE_MEDIA_CONFIG.screenshare;
