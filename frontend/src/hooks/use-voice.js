@@ -1,8 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { API_BASE, LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
+import { API_BASE, LIVE_MEDIA_CONFIG, initLiveMediaConfig, AUDIO_OUTPUT_KEY } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { createPeerMap } from './webrtc-helpers.js';
+import { useAudioPreferences } from './use-audio-preferences.js';
+import { startVadMonitor, computeVadThreshold } from './vad-monitor.js';
+
+export { computeVadThreshold };
 
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 const DEFAULT_AUDIO_CONFIG = {
@@ -12,18 +16,6 @@ const DEFAULT_AUDIO_CONFIG = {
     opus_bitrate: 32000,
     opus_stereo: false,
 };
-
-/**
- * Convert a 1–100 sensitivity slider value to an RMS threshold.
- * Higher sensitivity → lower threshold → easier to trigger speaking.
- *
- * @param {number} sensitivity — slider value (1–100, default 50)
- * @returns {number} RMS threshold in the range 10⁻⁴ … 10⁻¹
- */
-export function computeVadThreshold(sensitivity) {
-    const clamped = Math.max(1, Math.min(100, sensitivity));
-    return Math.pow(10, -4 + (100 - clamped) / 100 * 3);
-}
 
 function ensureAudioPlay(audio) {
     const playPromise = audio.play();
@@ -105,14 +97,13 @@ export function useVoice(user) {
     const audioConfigRef = useRef(DEFAULT_AUDIO_CONFIG);
     const userRef = useRef(user);
     const joinStateRef = useRef('idle');
-    const vadAudioCtxRef = useRef(null);
-    const vadAnalyserRef = useRef(null);
-    const vadRafRef = useRef(null);
+    const vadMonitorRef = useRef(null);
     const vadSpeakingRef = useRef(false);
-    const vadLastChangeRef = useRef(0);
     const isMutedRef = useRef(false);
 
     const isJoined = joinState === 'joined';
+
+    const { prefsRef } = useAudioPreferences();
 
     useEffect(() => { userRef.current = user; }, [user]);
     useEffect(() => { joinStateRef.current = joinState; }, [joinState]);
@@ -146,15 +137,10 @@ export function useVoice(user) {
     }, []);
 
     const stopVad = useCallback(() => {
-        if (vadRafRef.current) {
-            cancelAnimationFrame(vadRafRef.current);
-            vadRafRef.current = null;
+        if (vadMonitorRef.current) {
+            vadMonitorRef.current.stop();
+            vadMonitorRef.current = null;
         }
-        if (vadAudioCtxRef.current) {
-            vadAudioCtxRef.current.close().catch(() => {});
-            vadAudioCtxRef.current = null;
-        }
-        vadAnalyserRef.current = null;
         vadSpeakingRef.current = false;
     }, []);
 
@@ -163,52 +149,23 @@ export function useVoice(user) {
         const stream = streamRef.current;
         if (!stream) return;
 
-        const audioCtx = new AudioContext();
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.3;
-        source.connect(analyser);
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-
-        vadAudioCtxRef.current = audioCtx;
-        vadAnalyserRef.current = analyser;
-
-        const data = new Uint8Array(analyser.fftSize);
-        const RISING_DEBOUNCE_MS = 22;
-        const FALLING_DEBOUNCE_MS = 180;
-
-        const tick = () => {
-            analyser.getByteTimeDomainData(data);
-            let sum = 0;
-            for (let i = 0; i < data.length; i++) {
-                const sample = (data[i] - 128) / 128;
-                sum += sample * sample;
-            }
-            const rms = Math.sqrt(sum / data.length);
-            const sensitivity = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50;
-            const threshold = computeVadThreshold(sensitivity);
-            const now = performance.now();
-            const wouldStartSpeaking = rms > threshold && !vadSpeakingRef.current;
-
-            if (rms > threshold !== vadSpeakingRef.current) {
-                const debounceMs = wouldStartSpeaking ? RISING_DEBOUNCE_MS : FALLING_DEBOUNCE_MS;
-                if (now - vadLastChangeRef.current >= debounceMs) {
-                    vadSpeakingRef.current = !vadSpeakingRef.current;
-                    vadLastChangeRef.current = now;
-                    setIsSpeaking(vadSpeakingRef.current);
-                    gateAudioToPeers(vadSpeakingRef.current && !isMutedRef.current);
-                    send('voice_speaking', { speaking: vadSpeakingRef.current });
+        vadMonitorRef.current = startVadMonitor(stream, {
+            prefsRef,
+            onSpeakingChange(speaking) {
+                vadSpeakingRef.current = speaking;
+                if (isMutedRef.current) {
+                    gateAudioToPeers(false);
+                    if (speaking) {
+                        send('voice_speaking', { speaking: false });
+                    }
+                } else {
+                    setIsSpeaking(speaking);
+                    gateAudioToPeers(speaking);
+                    send('voice_speaking', { speaking });
                 }
-            } else {
-                vadLastChangeRef.current = now;
-            }
-
-            vadRafRef.current = requestAnimationFrame(tick);
-        };
-
-        vadRafRef.current = requestAnimationFrame(tick);
-    }, [send, stopVad, gateAudioToPeers]);
+            },
+        });
+    }, [send, stopVad, gateAudioToPeers, prefsRef]);
 
     const fetchParticipants = useCallback(async () => {
         try {
@@ -250,7 +207,7 @@ export function useVoice(user) {
                 audio.style.display = 'none';
                 document.body.appendChild(audio);
 
-                const outputDeviceId = localStorage.getItem('mc-audio-output');
+                const outputDeviceId = localStorage.getItem(AUDIO_OUTPUT_KEY);
                 if (outputDeviceId && typeof audio.setSinkId === 'function') {
                     audio.setSinkId(outputDeviceId).catch(() => {});
                 }
@@ -314,7 +271,7 @@ export function useVoice(user) {
                 if (entry) {
                     entry.audio.pause();
                     entry.audio.srcObject = null;
-                    if (entry.audio.parentNode) entry.audio.parentNode.removeChild(entry.audio);
+                    if (entry.parentNode) entry.parentNode.removeChild(entry.audio);
                     audioElementsRef.current.delete(leftUserId);
                 }
                 fetchParticipants();
@@ -360,7 +317,7 @@ export function useVoice(user) {
 
         try {
             const config = audioConfigRef.current;
-            const inputDeviceId = localStorage.getItem('mc-audio-input');
+            const inputDeviceId = prefsRef.current.inputDevice;
             const audioConstraints = {
                 echoCancellation: config.echo_cancellation,
                 noiseSuppression: config.noise_suppression,
@@ -405,7 +362,7 @@ export function useVoice(user) {
             }
             setJoinState('idle');
         }
-    }, [cleanup, startVad, voiceOnCreated, mungeSdp]);
+    }, [cleanup, startVad, voiceOnCreated, mungeSdp, prefsRef]);
 
     const leave = useCallback(async () => {
         const currentUser = userRef.current;
@@ -427,7 +384,14 @@ export function useVoice(user) {
     const toggleMute = useCallback(() => {
         setIsMuted((prev) => {
             const next = !prev;
-            gateAudioToPeers(!next && vadSpeakingRef.current);
+            if (next && vadSpeakingRef.current) {
+                gateAudioToPeers(false);
+                send('voice_speaking', { speaking: false });
+                setIsSpeaking(false);
+            } else if (!next && vadSpeakingRef.current) {
+                gateAudioToPeers(true);
+                send('voice_speaking', { speaking: true });
+            }
             send('voice_mute', { muted: next });
             return next;
         });

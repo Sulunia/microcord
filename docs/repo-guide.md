@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.8.1**.
+Version **0.8.3**.
 
 ---
 
@@ -84,9 +84,11 @@ microcord/
 │       ├── hooks/
 │       │   ├── realtime.jsx        # RealtimeProvider context + useRealtime() hook; owns WS lifecycle (ticket, connect, reconnect); exposes send/subscribe/connected
 │       │   ├── webrtc-helpers.js   # createPeerMap() factory — shared peer-connection map with closePeer, closeAllPeers, sendOffer, applySignal
+│       │   ├── vad-monitor.js      # startVadMonitor(stream, { prefsRef, onSpeakingChange }) — reusable RMS-based VAD; returns { stop }
+│       │   ├── use-audio-preferences.js # useAudioPreferences() — reactive localStorage-backed audio prefs (input/output/vadSensitivity) with prefsRef for hot loops
 │       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
 │       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs)
-│       │   ├── use-voice.js        # Voice join/leave (state machine: idle→joining→joined→leaving→idle), mute toggle, VAD, WebRTC mesh via createPeerMap, DOM-attached <audio> elements
+│       │   ├── use-voice.js        # Voice join/leave (state machine: idle→joining→joined→leaving→idle), mute toggle, VAD via startVadMonitor, WebRTC mesh via createPeerMap, DOM-attached <audio> elements
 │       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
 │       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
 │       ├── components/
@@ -332,7 +334,7 @@ Starlette is provided transitively through Connexion.
 8. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
 9. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
 10. Mute toggle gates audio to peers via `RTCRtpSender.replaceTrack(null)` and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
-11. Client-side VAD uses `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`) persisted in localStorage `mc-vad-sensitivity` (range 1–100, default 50, higher = more sensitive). When speaking state changes (with 90ms debounce), audio is gated to peers via `RTCRtpSender.replaceTrack(audioTrack | null)` — the local stream stays enabled so VAD always has real mic input. `voice_speaking` is also sent over WS; server broadcasts to all clients. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own lightweight mic analyser to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
+11. Client-side VAD uses `startVadMonitor()` (from `vad-monitor.js`) which creates an `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`). Sensitivity is read from `useAudioPreferences().prefsRef` (no localStorage reads in the hot loop). When speaking state changes (with rising/falling debounce), `onSpeakingChange` fires — in `useVoice` this gates audio to peers via `RTCRtpSender.replaceTrack(audioTrack | null)` and sends `voice_speaking` over WS. **When muted, speaking events are suppressed**: VAD still runs on real mic input, but `voice_speaking { speaking: true }` is never sent to peers and the local `isSpeaking` state stays false. Muting while already speaking immediately sends `voice_speaking { speaking: false }`. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own `startVadMonitor` instance to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
 12. `useVoice.leave()` transitions `joined → leaving → idle`, cleans up all peer connections/VAD/stream, then calls `POST /api/voice/leave`. `voice_participant_left` broadcast.
 
 ### Screen sharing
