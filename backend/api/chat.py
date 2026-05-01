@@ -112,7 +112,7 @@ async def send_message(body: dict) -> ConnexionResponse:
         return ConnexionResponse(status_code=400, body={"error": f"Message too long (max {MAX_MESSAGE_CONTENT_LENGTH} characters)"})
 
     msg = await repo.create_message(author_id, content, image_url)
-    result = msg.to_dict(include_author=True)
+    result = msg.to_dict()
     logger.info(f"Message sent by {author_id}: {result['id']}")
 
     has_media = bool(result.get("image_url"))
