@@ -111,6 +111,7 @@ export function MessageInput({ onSend }) {
       setAlertMsg('Failed to send message. Please try again.');
     } finally {
       setSending(false);
+      requestAnimationFrame(() => textareaRef.current?.focus());
     }
   };
 
