@@ -12,6 +12,8 @@ export function MessageInput({ onSend }) {
   const [alertMsg, setAlertMsg] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [sending, setSending] = useState(false);
+  const sentTextRef = useRef('');
+  const sentImageRef = useRef(null);
   const fileRef = useRef(null);
   const textareaRef = useRef(null);
   const dragCounterRef = useRef(0);
@@ -75,10 +77,9 @@ export function MessageInput({ onSend }) {
   }, [processFile]);
 
   const handleKeyDown = (e) => {
-    if (sending) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      submit();
+      if (!sending) submit();
     }
   };
 
@@ -103,10 +104,12 @@ export function MessageInput({ onSend }) {
       return;
     }
     setSending(true);
+    sentTextRef.current = text;
+    sentImageRef.current = imageFile;
     try {
       await onSend(text, imageFile);
-      setText('');
-      clearImage();
+      setText((prev) => prev === sentTextRef.current ? '' : prev);
+      if (sentImageRef.current === imageFile) clearImage();
     } catch {
       setAlertMsg('Failed to send message. Please try again.');
     } finally {
@@ -169,7 +172,6 @@ export function MessageInput({ onSend }) {
           onInput={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          disabled={sending}
         />
         <button class={styles.sendBtn} onClick={submit} title="Send" type="button" disabled={sending}>
           {sending ? <span class={styles.spinner} /> : '➤'}
