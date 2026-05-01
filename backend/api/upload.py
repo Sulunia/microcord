@@ -203,7 +203,7 @@ async def upload_avatar(file) -> ConnexionResponse:
     result = user.to_dict()
     await ws_manager.broadcast({
         "type": "user_updated",
-        "data": {"user_id": user_id, "user": result},
+        "data": {"user_id": user_id, "user": user.to_public_dict()},
     })
 
     logger.info(f"Avatar updated for user {user_id}")

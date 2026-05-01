@@ -55,7 +55,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
     prevIdsRef.current = currentIds;
   }, [participants]);
 
-  const name = user?.display_name ?? user?.name ?? '';
+  const name = user?.display_name ?? '';
   const initial = name.charAt(0).toUpperCase() || 'U';
   const hasAvatar = Boolean(user?.avatar_url) && !avatarError;
 

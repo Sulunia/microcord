@@ -148,7 +148,7 @@ class MediaManager:
         if user:
             await ws_manager.broadcast({
                 "type": "user_updated",
-                "data": {"user_id": user_id, "user": user.to_dict()},
+                "data": {"user_id": user_id, "user": user.to_public_dict()},
             })
         else:
             logger.warning(f"User {user_id} not found for avatar update")

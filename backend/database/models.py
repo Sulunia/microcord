@@ -41,6 +41,14 @@ class User(Base):
             "created_at": self.created_at.isoformat() + ("Z" if not self.created_at.tzinfo else ""),
         }
 
+    def to_public_dict(self):
+        return {
+            "id": self.id,
+            "display_name": self.effective_name,
+            "avatar_url": self.avatar_url,
+            "tick_sound": self.tick_sound,
+        }
+
 
 class Message(Base):
     __tablename__ = "messages"
@@ -67,7 +75,7 @@ class Message(Base):
             "created_at": self.created_at.isoformat() + ("Z" if not self.created_at.tzinfo else ""),
         }
         if include_author and self.author:
-            d["author"] = self.author.to_dict()
+            d["author"] = self.author.to_public_dict()
         return d
 
 

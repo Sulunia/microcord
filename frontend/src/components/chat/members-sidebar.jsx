@@ -1,7 +1,7 @@
 import styles from './members-sidebar.module.css';
 
 function MemberItem({ user, isOnline }) {
-  const name = user?.display_name || user?.name || 'Unknown';
+  const name = user?.display_name || 'Unknown';
   const initial = name.charAt(0).toUpperCase();
   const hasAvatar = Boolean(user?.avatar_url);
 

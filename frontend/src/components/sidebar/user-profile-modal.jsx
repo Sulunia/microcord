@@ -65,7 +65,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
 
   useEffect(() => {
     if (!isOpen) return;
-    setDisplayName(user?.display_name ?? user?.name ?? '');
+    setDisplayName(user?.display_name ?? '');
     setAvatarPreview(null);
     setAvatarFile(null);
     setAvatarError(null);
