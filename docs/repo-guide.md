@@ -25,7 +25,7 @@ Version **0.8.3**.
 - **Frontend** — Preact + Vite, served on port 5173. Vite proxies `/api`, `/ws`, `/uploads` to the backend. A shared `RealtimeProvider` context owns the single WebSocket connection; all hooks consume `useRealtime()` for send/subscribe.
 - **Backend** — Python 3.12 ASGI app. Starlette wraps Connexion (OpenAPI-driven routes), a native WebSocket endpoint, and a static file mount for uploads.
 - **Database** — SQLite with WAL mode, single-writer asyncio queue for mutations, separate async session pool for reads.
-- **Voice** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay; audio flows directly between browsers via RTCPeerConnection.
+- **Voice** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay; audio flows directly between browsers via RTCPeerConnection. Frontend voice logic is split into focused modules: `use-voice.js` (orchestrator), `use-voice-mesh.js` (WebRTC peers + audio elements), `use-voice-participants.js` (participant state + WS events), `voice-sdp.js` (SDP munging), `vad-monitor.js` (VAD).
 - **Screen sharing** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay over the existing WebSocket.
 
 ---
@@ -89,9 +89,12 @@ microcord/
 │       │   ├── audio-notifications.js # playNotification(url, volume) — cached notification sound playback; SOUND_ENTER_VOICE / SOUND_EXIT_VOICE constants
 │       │   ├── use-latest.js       # useLatest(value) — returns a stable ref that always holds the latest value (replaces manual ref-mirror pattern)
 │       │   ├── use-live-media-config.js # useLiveMediaConfig() — initialises LIVE_MEDIA_CONFIG once, exposes iceServers / audioConfig / screenshareConfig
+│       │   ├── voice-sdp.js        # mungeOpusSdp(sdp, bitrate, stereo) — injects Opus fmtp parameters into SDP
+│       │   ├── use-voice-mesh.js   # useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) — WebRTC mesh: peer connections, audio senders, remote audio elements, SDP munging, disposePeer/disposeAllPeers/setVolume
+│       │   ├── use-voice-participants.js # useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal }) — participant REST fetch, speakingUsers state, WS subscriptions for join/leave/mute/speaking/signal events
 │       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
 │       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs)
-│       │   ├── use-voice.js        # Voice join/leave (state machine: idle→joining→joined→leaving→idle), mute toggle, VAD via startVadMonitor, WebRTC mesh via createPeerMap, centralised cleanup (disposePeer/disposeAllPeers/disposeLocalVoice/resetVoiceState)
+│       │   ├── use-voice.js        # Thin orchestrator composing useVoiceMesh + useVoiceParticipants + VAD; join/leave state machine, mute toggle, cleanup ownership
 │       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
 │       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
 │       ├── components/
@@ -327,18 +330,18 @@ Starlette is provided transitively through Connexion.
 
 ### Voice
 
-1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, audio constraints).
-2. `useVoice.join()` transitions through a state machine: `idle → joining → joined` (or back to `idle` on error).
-3. On `joining`: acquire mic stream via `getUserMedia`, then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
+1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, audio constraints) via `useLiveMediaConfig()`.
+2. `useVoice.join()` (orchestrator) transitions through a state machine: `idle → joining → joined` (or back to `idle` on error).
+3. On `joining`: acquire mic stream via `getUserMedia` (using constraints from `useLiveMediaConfig` and device from `useAudioPreferences`), then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
 4. `voice_participant_joined` broadcast to all WS clients.
-5. Joiner creates an `RTCPeerConnection` (mesh) to each existing participant and sends SDP offers via `voice_signal`. Peer connections are managed through `createPeerMap()` from `webrtc-helpers.js`.
+5. Joiner sends SDP offers via `useVoiceMesh.sendOffersToParticipants()` — creates an `RTCPeerConnection` (mesh) to each existing participant through `createPeerMap()` from `webrtc-helpers.js`. SDP is munged via `voice-sdp.js` (`mungeOpusSdp`) to apply Opus bitrate/stereo settings.
 6. Existing participants receive offers, create answers, and send them back via `voice_signal`.
 7. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
-8. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
-9. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
+8. Remote audio routed through hidden DOM `<audio>` elements managed by `useVoiceMesh` (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `setVolume`.
+9. `useVoiceParticipants` subscribes to WS events for participant lifecycle (join/leave), mute state, speaking state, and incoming voice signals — dispatching to `useVoiceMesh` for peer disposal and signal handling.
 10. Mute toggle gates audio to peers via `RTCRtpSender.replaceTrack(null)` and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
-11. Client-side VAD uses `startVadMonitor()` (from `vad-monitor.js`) which creates an `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`). Sensitivity is read from `useAudioPreferences().prefsRef` (no localStorage reads in the hot loop). When speaking state changes (with rising/falling debounce), `onSpeakingChange` fires — in `useVoice` this gates audio to peers via `RTCRtpSender.replaceTrack(audioTrack | null)` and sends `voice_speaking` over WS. **When muted, speaking events are suppressed**: VAD still runs on real mic input, but `voice_speaking { speaking: true }` is never sent to peers and the local `isSpeaking` state stays false. Muting while already speaking immediately sends `voice_speaking { speaking: false }`. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own `startVadMonitor` instance to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
-12. `useVoice.leave()` transitions `joined → leaving → idle`, cleans up all peer connections/VAD/stream, then calls `POST /api/voice/leave`. `voice_participant_left` broadcast.
+11. Client-side VAD uses `startVadMonitor()` (from `vad-monitor.js`) which creates an `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`). Sensitivity is read from `useAudioPreferences().prefsRef` (no localStorage reads in the hot loop). When speaking state changes (with rising/falling debounce), `onSpeakingChange` fires — in `useVoice` this gates audio to peers via `gateAudioToPeers()` and sends `voice_speaking` over WS. **When muted, speaking events are suppressed**: VAD still runs on real mic input, but `voice_speaking { speaking: true }` is never sent to peers and the local `isSpeaking` state stays false. Muting while already speaking immediately sends `voice_speaking { speaking: false }`. The receiving client updates a `speakingUsers` map (in `useVoiceParticipants`), which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own `startVadMonitor` instance to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
+12. `useVoice.leave()` transitions `joined → leaving → idle`, cleans up all peer connections/VAD/stream via the orchestrator's `cleanup()` (composing `disposeLocalVoice` + `disposeAllPeers` + `resetVoiceState`), then calls `POST /api/voice/leave`. `voice_participant_left` broadcast.
 
 ### Screen sharing
 
