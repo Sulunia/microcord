@@ -75,8 +75,8 @@
   position: absolute;
   bottom: -1px;
   right: -1px;
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
   border-radius: 2px;
   border: 2px solid var(--mc-bg);
 }
