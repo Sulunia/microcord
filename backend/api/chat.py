@@ -4,7 +4,6 @@ import os
 from datetime import datetime, timezone
 
 from connexion.lifecycle import ConnexionResponse
-from connexion import request as connexion_request
 
 from constants import (
     DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT, MAX_MESSAGE_CONTENT_LENGTH,
@@ -13,6 +12,7 @@ from constants import (
 from database.repository import repo
 from services.media_manager import media_manager
 from services.guard import guard
+from services.utils.request_context import current_user_id
 from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -29,15 +29,6 @@ def _decode_cursor(cursor: str) -> tuple[datetime, str]:
     ts_str, msg_id = raw.split("|", 1)
     ts = datetime.fromtimestamp(int(ts_str) / 1_000_000, tz=timezone.utc)
     return ts, msg_id
-
-
-def _get_current_user_id() -> str | None:
-    try:
-        scope = connexion_request.scope
-        return scope.get("state", {}).get("current_user", {}).get("id")
-    except Exception:
-        logger.exception("Failed to get current user ID")
-        return None
 
 
 async def list_messages(limit: int = DEFAULT_MESSAGE_LIMIT, cursor: str | None = None) -> dict:
@@ -65,7 +56,7 @@ async def list_messages(limit: int = DEFAULT_MESSAGE_LIMIT, cursor: str | None =
 
 
 async def delete_message(message_id: str) -> ConnexionResponse:
-    author_id = _get_current_user_id()
+    author_id = current_user_id()
     if not author_id:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
 
@@ -88,7 +79,7 @@ async def delete_message(message_id: str) -> ConnexionResponse:
 
 
 async def send_message(body: dict) -> ConnexionResponse:
-    author_id = _get_current_user_id()
+    author_id = current_user_id()
     if not author_id:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
 

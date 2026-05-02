@@ -1,7 +1,6 @@
 import logging
 
 from connexion.lifecycle import ConnexionResponse
-from connexion import request as connexion_request
 
 from constants import AUTH_PROVIDER, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH
 from database.repository import repo
@@ -9,18 +8,11 @@ from services.auth import (
     auth_provider, create_access_token, create_refresh_token,
     rotate_refresh_token, revoke_all_refresh_tokens, decode_token,
 )
-from services.guard import guard, get_client_ip
+from services.guard import guard
+from services.utils.request_context import client_ip, authorization_bearer, current_user_id
 from services.ws_ticket import create_ticket
 
 logger = logging.getLogger(__name__)
-
-
-def _get_ip() -> str:
-    try:
-        return get_client_ip(connexion_request.scope)
-    except Exception:
-        logger.exception("Failed to resolve client IP")
-        return "unknown"
 
 
 def _ratelimited(retry_after: float | None) -> ConnexionResponse | None:
@@ -33,7 +25,7 @@ def _ratelimited(retry_after: float | None) -> ConnexionResponse | None:
 
 
 async def register(body: dict) -> ConnexionResponse:
-    ip = _get_ip()
+    ip = client_ip()
     rl = _ratelimited(guard.check_register(ip))
     if rl:
         return rl
@@ -66,7 +58,7 @@ async def register(body: dict) -> ConnexionResponse:
 
 
 async def login(body: dict) -> ConnexionResponse:
-    ip = _get_ip()
+    ip = client_ip()
     rl = _ratelimited(guard.check_login(ip))
     if rl:
         return rl
@@ -92,7 +84,7 @@ async def login(body: dict) -> ConnexionResponse:
 
 
 async def refresh(body: dict) -> ConnexionResponse:
-    ip = _get_ip()
+    ip = client_ip()
     rl = _ratelimited(guard.check_refresh(ip))
     if rl:
         return rl
@@ -117,11 +109,7 @@ async def me(**kwargs) -> ConnexionResponse:
     user_id = auth_header.get("sub")
 
     if not user_id:
-        scope = connexion_request.scope if hasattr(connexion_request, 'scope') else {}
-        state = scope.get("state", {})
-        current_user = state.get("current_user")
-        if current_user:
-            user_id = current_user["id"]
+        user_id = current_user_id()
 
     if not user_id:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
@@ -144,12 +132,10 @@ async def ws_ticket(**kwargs) -> ConnexionResponse:
         if jti and guard.is_jti_revoked(jti):
             return ConnexionResponse(status_code=401, body={"error": "Token has been revoked"})
     else:
-        scope = connexion_request.scope if hasattr(connexion_request, 'scope') else {}
-        headers = dict(scope.get("headers", []))
-        auth_header = headers.get(b"authorization", b"").decode()
-        if not auth_header.startswith("Bearer "):
+        token = authorization_bearer()
+        if not token:
             return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
-        payload = decode_token(auth_header[7:])
+        payload = decode_token(token)
         if not payload:
             return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
         if guard.is_jti_revoked(payload["jti"]):
@@ -160,12 +146,9 @@ async def ws_ticket(**kwargs) -> ConnexionResponse:
 
 
 async def logout(**kwargs) -> ConnexionResponse:
-    scope = connexion_request.scope if hasattr(connexion_request, 'scope') else {}
-    headers = dict(scope.get("headers", []))
-    auth_header = headers.get(b"authorization", b"").decode()
-    if not auth_header.startswith("Bearer "):
+    token = authorization_bearer()
+    if not token:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
-    token = auth_header[7:]
     payload = decode_token(token)
     if not payload:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})

@@ -1,20 +1,11 @@
 import logging
 from connexion.lifecycle import ConnexionResponse
-from connexion import request as connexion_request
 from database.repository import repo
+from services.utils.request_context import current_user
 from services.voice_room import voice_room
 from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
-
-
-def _get_current_user() -> dict | None:
-    try:
-        scope = connexion_request.scope
-        return scope.get("state", {}).get("current_user")
-    except Exception:
-        logger.exception("Failed to get current user")
-        return None
 
 
 async def _resolve_participants() -> list[dict]:
@@ -36,7 +27,7 @@ async def _resolve_participants() -> list[dict]:
 
 
 async def join_voice(body: dict) -> ConnexionResponse:
-    jwt_user = _get_current_user()
+    jwt_user = current_user()
     if not jwt_user:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
     user_id = jwt_user["id"]
@@ -57,7 +48,7 @@ async def join_voice(body: dict) -> ConnexionResponse:
 
 
 async def leave_voice(body: dict) -> ConnexionResponse:
-    jwt_user = _get_current_user()
+    jwt_user = current_user()
     if not jwt_user:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
     user_id = jwt_user["id"]

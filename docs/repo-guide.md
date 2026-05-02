@@ -57,7 +57,7 @@ microcord/
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
 │   │   ├── users.py            # list_users, get_user, update_user, get_online_users
 │   │   ├── voice.py            # join, leave, participants
-│   │   └── upload.py           # upload_file, upload_avatar
+│   │   └── upload.py           # upload_file, upload_avatar (thin orchestration via services/utils/)
 │   ├── database/
 │   │   ├── models.py           # SQLAlchemy models (User, Message, RefreshToken)
 │   │   └── repository.py      # Async repository (single-writer queue for SQLite safety)
@@ -65,9 +65,13 @@ microcord/
 │   │   ├── auth.py             # Access/refresh token creation, rotation, JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
-│   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling)
+│   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling); typed jobs (MessageMediaJob, AvatarJob)
 │   │   ├── voice_room.py       # In-memory voice participants, per-user mute/speaking state, single-sharer tracking
-│   │   └── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
+│   │   ├── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
+│   │   └── utils/
+│   │       ├── media_validator.py  # File-type validation (extension whitelists, magic-byte inspection)
+│   │       ├── upload_storage.py   # Streaming file uploads to disk with size enforcement
+│   │       └── avatar_service.py   # Avatar upload lifecycle (validation, storage, cleanup, DB update, WS broadcast)
 │   └── ws/
 │       ├── manager.py          # Per-user WebSocket map, broadcast, send_to
 │       └── handler.py          # WS endpoint: JWT auth, chat relay, voice + screenshare signaling, presence (online/offline)
@@ -322,11 +326,18 @@ Starlette is provided transitively through Connexion.
 ### Image upload
 
 1. Client `POST /api/upload` with multipart file.
-2. Backend validates file extension + magic bytes (PNG/JPEG/GIF/WEBP/MP4/WEBM/MOV).
+2. `api.upload.upload_file` delegates to `MediaValidator` (extension + magic-byte check) and `UploadStorage` (streamed write with size enforcement).
 3. File saved to `uploads/` with a UUID filename.
 4. Returns `{ url: "/uploads/<uuid>.<ext>" }`.
 5. Client includes `image_url` in the subsequent `POST /api/messages`.
-6. Background `MediaManager` converts images to AVIF (scaled down to `MEDIA_IMAGE_MAX_DIMENSION`), videos to AV1/MP4 (scaled by `MEDIA_VIDEO_SCALE`), and GIFs to AV1/MP4 at original resolution (no scaling). After conversion the DB is updated and a `chat_message` WS broadcast replaces the placeholder URL.
+6. Background `MediaManager` picks up a typed `MessageMediaJob` and converts images to AVIF (scaled down to `MEDIA_IMAGE_MAX_DIMENSION`), videos to AV1/MP4 (scaled by `MEDIA_VIDEO_SCALE`), and GIFs to AV1/MP4 at original resolution (no scaling). After conversion the DB is updated and a `chat_message` WS broadcast replaces the placeholder URL.
+
+### Avatar upload
+
+1. Client `POST /api/avatar` with multipart file.
+2. `api.upload.upload_avatar` delegates to `AvatarService`, which uses `MediaValidator` (JPEG/PNG/AVIF extension + magic-byte check), `UploadStorage` (streamed write, 1 MB limit), and `MediaManager` (enqueued as typed `AvatarJob` for AVIF conversion if not already AVIF).
+3. Old avatar files for the user are deleted before the new one is saved.
+4. DB updated with new avatar URL; `user_updated` WS broadcast to all clients.
 
 ### Voice
 
@@ -441,7 +452,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Registration passphrase | 6-digit hex uppercase secret required to register; auto-generated and logged on startup, override via `REGISTRATION_PASSPHRASE` env var |
 | WS message size limit | Inbound WebSocket messages exceeding 64 KB are dropped |
 | CORS lockdown | Restricted to `CORS_ORIGIN` (default `http://localhost:5173`) |
-| Upload validation | File extension check + magic byte verification (PNG/JPEG/GIF/WEBP) |
+| Upload validation | File extension check + magic byte verification via `MediaValidator` (PNG/JPEG/GIF/WEBP/MP4/WEBM/MOV for uploads; JPEG/PNG/AVIF for avatars) |
 | Upload size limits | Chat images: 50 MB (`MAX_UPLOAD_SIZE_BYTES`), avatars: 1 MB (`MAX_AVATAR_SIZE_BYTES`) |
 | Image URL validation | Only `/uploads/`-prefixed URLs accepted in messages and avatars |
 | Password storage | bcrypt hashing via `bcrypt >=4.0` |
