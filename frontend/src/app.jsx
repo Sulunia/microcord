@@ -3,10 +3,12 @@ import { Sidebar } from './components/sidebar/sidebar.jsx';
 import { ChatPanel } from './components/chat/chat-panel.jsx';
 import { MembersSidebar } from './components/chat/members-sidebar.jsx';
 import { LoginScreen } from './components/login-screen.jsx';
+import { MobileLayout } from './components/mobile/mobile-layout.jsx';
 import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
+import { useIsMobile } from './hooks/use-is-mobile.js';
 import { RealtimeProvider } from './hooks/realtime.jsx';
 import { UI_CONFIG } from './constants.js';
 import styles from './app.module.css';
@@ -52,10 +54,7 @@ function HelpModal({ onClose }) {
   );
 }
 
-function AuthenticatedApp({ user, logout, updateProfile, uploadAvatar }) {
-  const chat = useChat(user);
-  const voice = useVoice(user);
-  const screenshare = useScreenshare(user, voice.participants, voice.isJoined);
+function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, uploadAvatar }) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [showHelp, setShowHelp] = useState(false);
   const [showMembers, setShowMembers] = useState(true);
@@ -124,6 +123,39 @@ function AuthenticatedApp({ user, logout, updateProfile, uploadAvatar }) {
       </div>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
+  );
+}
+
+function AuthenticatedApp({ user, logout, updateProfile, uploadAvatar }) {
+  const chat = useChat(user);
+  const voice = useVoice(user);
+  const screenshare = useScreenshare(user, voice.participants, voice.isJoined);
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <MobileLayout
+        chat={chat}
+        voice={voice}
+        screenshare={screenshare}
+        user={user}
+        onUpdateProfile={updateProfile}
+        onUploadAvatar={uploadAvatar}
+        onLogout={logout}
+      />
+    );
+  }
+
+  return (
+    <DesktopLayout
+      chat={chat}
+      voice={voice}
+      screenshare={screenshare}
+      user={user}
+      logout={logout}
+      updateProfile={updateProfile}
+      uploadAvatar={uploadAvatar}
+    />
   );
 }
 
