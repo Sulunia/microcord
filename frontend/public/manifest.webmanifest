@@ -1,7 +1,7 @@
 {
   "name": "Microcord",
   "short_name": "Microcord",
-  "description": "Minimal self-hosted Discord-like chat app",
+  "description": "Minimal self-hosted chat app",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#2e8b3a",
