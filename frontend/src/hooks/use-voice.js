@@ -1,118 +1,77 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { API_BASE, LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
+import { API_BASE } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
+import { useAudioPreferences } from './use-audio-preferences.js';
+import { startVadMonitor } from './vad-monitor.js';
+import { useLatest } from './use-latest.js';
+import { useLiveMediaConfig } from './use-live-media-config.js';
+import { useVoiceMesh } from './use-voice-mesh.js';
+import { useVoiceParticipants } from './use-voice-participants.js';
 
-const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-const DEFAULT_AUDIO_CONFIG = {
-    echo_cancellation: true,
-    noise_suppression: true,
-    auto_gain_control: true,
-    opus_bitrate: 32000,
-    opus_stereo: false,
-};
-
-export function computeVadThreshold(sensitivity) {
-    const s = Math.max(1, Math.min(100, sensitivity));
-    return Math.pow(10, -4 + (100 - s) / 100 * 3);
-}
-
-function ensureAudioPlay(audio) {
-    const p = audio.play();
-    if (!p) return;
-    p.catch((err) => {
-        if (err.name === 'NotAllowedError') {
-            const retry = () => {
-                audio.play().catch(() => {});
-                document.removeEventListener('click', retry);
-                document.removeEventListener('keydown', retry);
-            };
-            document.addEventListener('click', retry);
-            document.addEventListener('keydown', retry);
-        }
-    });
-}
-
-function mungeOpusSdp(sdp, bitrate, stereo) {
-    const match = sdp.match(/a=rtpmap:(\d+) opus\/48000/);
-    if (!match) return sdp;
-    const pt = match[1];
-    const fmtpRe = new RegExp(`a=fmtp:${pt} [^\\r\\n]*`);
-    const existing = sdp.match(fmtpRe);
-    if (existing) {
-        let line = existing[0];
-        if (/maxaveragebitrate=/.test(line)) {
-            line = line.replace(/maxaveragebitrate=\d+/, `maxaveragebitrate=${bitrate}`);
-        } else {
-            line += `;maxaveragebitrate=${bitrate}`;
-        }
-        if (/stereo=/.test(line)) {
-            line = line.replace(/stereo=\d/, `stereo=${stereo ? 1 : 0}`);
-        } else {
-            line += `;stereo=${stereo ? 1 : 0}`;
-        }
-        return sdp.replace(fmtpRe, line);
-    }
-    const rtpmapRe = new RegExp(`(a=rtpmap:${pt} opus/48000[^\\r\\n]*)`);
-    return sdp.replace(
-        rtpmapRe,
-        `$1\r\na=fmtp:${pt} maxaveragebitrate=${bitrate};stereo=${stereo ? 1 : 0}`,
-    );
-}
-
+/**
+ * Voice-channel hook — thin orchestrator composing focused modules.
+ *
+ * Lifecycle state machine:
+ *   `idle` → `joining` → `joined` → `leaving` → `idle`
+ *                      ↘ `error` → `idle`
+ *
+ * Delegates to:
+ *   - `useVoiceMesh` — WebRTC peer connections, audio senders, remote audio elements
+ *   - `useVoiceParticipants` — participant list, speaking state, WS subscriptions
+ *   - `startVadMonitor` (vad-monitor.js) — RMS-based VAD
+ *   - `useLiveMediaConfig` — ICE servers / audio config
+ *   - `useAudioPreferences` — input device / VAD sensitivity
+ *
+ * @param {{ id: string } | null} user
+ */
 export function useVoice(user) {
-    const [participants, setParticipants] = useState([]);
-    const [isJoined, setIsJoined] = useState(false);
+    const [joinState, setJoinState] = useState('idle');
     const [isMuted, setIsMuted] = useState(false);
-    const [speakingUsers, setSpeakingUsers] = useState(new Map());
     const [isSpeaking, setIsSpeaking] = useState(false);
+
     const streamRef = useRef(null);
-    const peerConnectionsRef = useRef(new Map());
-    const audioSendersRef = useRef(new Map());
-    const audioElementsRef = useRef(new Map());
-    const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
-    const audioConfigRef = useRef(DEFAULT_AUDIO_CONFIG);
-    const userRef = useRef(user);
-    const isJoinedRef = useRef(false);
-    const vadAudioCtxRef = useRef(null);
-    const vadAnalyserRef = useRef(null);
-    const vadRafRef = useRef(null);
+    const vadMonitorRef = useRef(null);
     const vadSpeakingRef = useRef(false);
-    const vadLastChangeRef = useRef(0);
-    const isMutedRef = useRef(false);
 
-    useEffect(() => { userRef.current = user; }, [user]);
-    useEffect(() => { isJoinedRef.current = isJoined; }, [isJoined]);
-    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+    const isJoined = joinState === 'joined';
 
-    const { send, subscribe } = useRealtime();
+    const { prefsRef } = useAudioPreferences();
+    const { audioConfig } = useLiveMediaConfig();
+    const { send } = useRealtime();
 
-    const gateAudioToPeers = useCallback((enabled) => {
-        const audioTrack = streamRef.current?.getAudioTracks()[0];
-        audioSendersRef.current.forEach((sender) => {
-            sender.replaceTrack(enabled ? audioTrack : null).catch(() => {});
-        });
-    }, []);
+    const userRef = useLatest(user);
+    const joinStateRef = useLatest(joinState);
+    const isMutedRef = useLatest(isMuted);
 
-    const userId = user?.id;
+    const {
+        gateAudioToPeers,
+        sendOffersToParticipants,
+        applySignal,
+        disposePeer,
+        disposeAllPeers,
+        setVolume,
+    } = useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef });
 
-    useEffect(() => {
-        initLiveMediaConfig().then(() => {
-            iceServersRef.current = LIVE_MEDIA_CONFIG.iceServers;
-            audioConfigRef.current = LIVE_MEDIA_CONFIG.audio;
-        });
-    }, []);
+    const {
+        participants,
+        setParticipants,
+        speakingUsers,
+        resetSpeakingUsers,
+        fetchParticipants,
+    } = useVoiceParticipants({
+        joinStateRef,
+        onParticipantLeft: disposePeer,
+        onSignal: applySignal,
+    });
+
+    // ── VAD lifecycle ───────────────────────────────────────────────
 
     const stopVad = useCallback(() => {
-        if (vadRafRef.current) {
-            cancelAnimationFrame(vadRafRef.current);
-            vadRafRef.current = null;
+        if (vadMonitorRef.current) {
+            vadMonitorRef.current.stop();
+            vadMonitorRef.current = null;
         }
-        if (vadAudioCtxRef.current) {
-            vadAudioCtxRef.current.close().catch(() => {});
-            vadAudioCtxRef.current = null;
-        }
-        vadAnalyserRef.current = null;
         vadSpeakingRef.current = false;
     }, []);
 
@@ -121,288 +80,108 @@ export function useVoice(user) {
         const stream = streamRef.current;
         if (!stream) return;
 
-        const audioCtx = new AudioContext();
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.3;
-        source.connect(analyser);
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-
-        vadAudioCtxRef.current = audioCtx;
-        vadAnalyserRef.current = analyser;
-
-        const data = new Uint8Array(analyser.fftSize);
-        const RISING_DEBOUNCE_MS = 22;
-        const FALLING_DEBOUNCE_MS = 180;
-
-        const tick = () => {
-            analyser.getByteTimeDomainData(data);
-            let sum = 0;
-            for (let i = 0; i < data.length; i++) {
-                const v = (data[i] - 128) / 128;
-                sum += v * v;
-            }
-            const rms = Math.sqrt(sum / data.length);
-            const sensitivity = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50;
-            const threshold = computeVadThreshold(sensitivity);
-            const now = performance.now();
-            const wouldStartSpeaking = rms > threshold && !vadSpeakingRef.current;
-
-            if (rms > threshold !== vadSpeakingRef.current) {
-                const debounceMs = wouldStartSpeaking ? RISING_DEBOUNCE_MS : FALLING_DEBOUNCE_MS;
-                if (now - vadLastChangeRef.current >= debounceMs) {
-                    vadSpeakingRef.current = !vadSpeakingRef.current;
-                    vadLastChangeRef.current = now;
-                    setIsSpeaking(vadSpeakingRef.current);
-                    gateAudioToPeers(vadSpeakingRef.current && !isMutedRef.current);
-                    send('voice_speaking', { speaking: vadSpeakingRef.current });
-                }
-            } else {
-                vadLastChangeRef.current = now;
-            }
-
-            vadRafRef.current = requestAnimationFrame(tick);
-        };
-
-        vadRafRef.current = requestAnimationFrame(tick);
-    }, [send, stopVad]);
-
-    const fetchParticipants = useCallback(async () => {
-        try {
-            const res = await authedFetch(`${API_BASE}/voice/participants`);
-            if (res.ok) setParticipants(await res.json());
-        } catch {}
-    }, []);
-
-    useEffect(() => { fetchParticipants(); }, [fetchParticipants]);
-
-    const sendSignal = useCallback((targetId, signal) => {
-        send('voice_signal', { target: targetId, signal });
-    }, [send]);
-
-    const mungeSdp = useCallback((sdp) => {
-        const cfg = audioConfigRef.current;
-        return mungeOpusSdp(sdp, cfg.opus_bitrate, cfg.opus_stereo);
-    }, []);
-
-    const createPC = useCallback((targetId) => {
-        const existing = peerConnectionsRef.current.get(targetId);
-        if (existing) existing.close();
-
-        const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
-
-        const stream = streamRef.current;
-        if (stream) {
-            stream.getTracks().forEach((t) => {
-                const sender = pc.addTrack(t, stream);
-                if (t.kind === 'audio') {
-                    audioSendersRef.current.set(targetId, sender);
-                    if (!(vadSpeakingRef.current && !isMutedRef.current)) {
-                        sender.replaceTrack(null).catch(() => {});
+        vadMonitorRef.current = startVadMonitor(stream, {
+            prefsRef,
+            onSpeakingChange(speaking) {
+                vadSpeakingRef.current = speaking;
+                if (isMutedRef.current) {
+                    gateAudioToPeers(false);
+                    if (speaking) {
+                        send('voice_speaking', { speaking: false });
                     }
+                } else {
+                    setIsSpeaking(speaking);
+                    gateAudioToPeers(speaking);
+                    send('voice_speaking', { speaking });
                 }
-            });
-        }
-
-        pc.onicecandidate = (e) => {
-            if (!e.candidate) return;
-            sendSignal(targetId, { type: 'ice-candidate', candidate: e.candidate });
-        };
-
-        pc.ontrack = (event) => {
-            const remoteStream = event.streams[0] || new MediaStream([event.track]);
-
-            let entry = audioElementsRef.current.get(targetId);
-            if (entry) {
-                entry.audio.srcObject = remoteStream;
-                ensureAudioPlay(entry.audio);
-            } else {
-                const audio = document.createElement('audio');
-                audio.setAttribute('autoplay', '');
-                audio.setAttribute('playsinline', '');
-                audio.style.display = 'none';
-                document.body.appendChild(audio);
-
-                const outputDeviceId = localStorage.getItem('mc-audio-output');
-                if (outputDeviceId && typeof audio.setSinkId === 'function') {
-                    audio.setSinkId(outputDeviceId).catch(() => {});
-                }
-                audio.srcObject = remoteStream;
-                ensureAudioPlay(audio);
-                audioElementsRef.current.set(targetId, { audio, volume: 1.0 });
-            }
-        };
-
-        peerConnectionsRef.current.set(targetId, pc);
-        return pc;
-    }, [sendSignal]);
-
-    const sendOffer = useCallback(async (targetId) => {
-        const pc = createPC(targetId);
-        const offer = await pc.createOffer();
-        const munged = mungeSdp(offer.sdp);
-        await pc.setLocalDescription({ type: offer.type, sdp: munged });
-        sendSignal(targetId, { type: 'offer', sdp: munged });
-    }, [createPC, sendSignal, mungeSdp]);
-
-    const handleSignal = useCallback(async (fromId, signal) => {
-        switch (signal.type) {
-            case 'offer': {
-                const pc = createPC(fromId);
-                await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: signal.sdp }));
-                const answer = await pc.createAnswer();
-                const munged = mungeSdp(answer.sdp);
-                await pc.setLocalDescription({ type: answer.type, sdp: munged });
-                sendSignal(fromId, { type: 'answer', sdp: munged });
-                break;
-            }
-            case 'answer': {
-                const pc = peerConnectionsRef.current.get(fromId);
-                if (pc) await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
-                break;
-            }
-            case 'ice-candidate': {
-                const pc = peerConnectionsRef.current.get(fromId);
-                if (pc && signal.candidate) {
-                    await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
-                }
-                break;
-            }
-        }
-    }, [createPC, sendSignal, mungeSdp]);
-
-    useEffect(() => {
-        const unsubs = [
-            subscribe('voice_participant_joined', () => {
-                if (isJoinedRef.current) {
-                    const enterAudio = new Audio('/sounds/EnterVoice.wav');
-                    enterAudio.volume = 0.7;
-                    enterAudio.play().catch(() => {});
-                }
-                fetchParticipants();
-            }),
-            subscribe('voice_participant_left', (data) => {
-                if (isJoinedRef.current) {
-                    const exitAudio = new Audio('/sounds/ExitVoice.wav');
-                    exitAudio.volume = 0.55;
-                    exitAudio.play().catch(() => {});
-                }
-                const pid = data.user_id;
-                const pc = peerConnectionsRef.current.get(pid);
-                if (pc) { pc.close(); peerConnectionsRef.current.delete(pid); }
-                audioSendersRef.current.delete(pid);
-                const entry = audioElementsRef.current.get(pid);
-                if (entry) {
-                    entry.audio.pause();
-                    entry.audio.srcObject = null;
-                    if (entry.audio.parentNode) entry.audio.parentNode.removeChild(entry.audio);
-                    audioElementsRef.current.delete(pid);
-                }
-                fetchParticipants();
-            }),
-            subscribe('voice_signal', (data) => {
-                if (isJoinedRef.current) handleSignal(data.from, data.signal);
-            }),
-            subscribe('voice_mute', (data) => {
-                const { user_id: muteUid, muted } = data;
-                setParticipants((prev) =>
-                    prev.map((p) => {
-                        const pid = p.user_id || p.id;
-                        return pid === muteUid ? { ...p, muted } : p;
-                    }),
-                );
-            }),
-            subscribe('voice_speaking', (data) => {
-                const { user_id: speakUid, speaking } = data;
-                setSpeakingUsers((prev) => {
-                    const next = new Map(prev);
-                    next.set(speakUid, speaking);
-                    return next;
-                });
-            }),
-            subscribe('screenshare_start', () => fetchParticipants()),
-            subscribe('screenshare_stop', () => fetchParticipants()),
-            subscribe('user_updated', () => fetchParticipants()),
-        ];
-        return () => unsubs.forEach((fn) => fn());
-    }, [subscribe, fetchParticipants, handleSignal]);
-
-    const cleanupPeerConnections = useCallback(() => {
-        peerConnectionsRef.current.forEach((pc) => pc.close());
-        peerConnectionsRef.current.clear();
-        audioSendersRef.current.clear();
-        audioElementsRef.current.forEach(({ audio }) => {
-            audio.pause();
-            audio.srcObject = null;
-            if (audio.parentNode) audio.parentNode.removeChild(audio);
+            },
         });
-        audioElementsRef.current.clear();
-    }, []);
+    }, [send, stopVad, gateAudioToPeers, prefsRef, isMutedRef]);
 
-    const cleanup = useCallback(() => {
+    // ── Local voice cleanup ─────────────────────────────────────────
+
+    const disposeLocalVoice = useCallback(() => {
         stopVad();
-        cleanupPeerConnections();
-        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
+    }, [stopVad]);
+
+    const resetVoiceState = useCallback(() => {
         setIsMuted(false);
         setIsSpeaking(false);
-        setSpeakingUsers(new Map());
-    }, [cleanupPeerConnections, stopVad]);
+        resetSpeakingUsers();
+    }, [resetSpeakingUsers]);
+
+    const cleanup = useCallback(() => {
+        disposeLocalVoice();
+        disposeAllPeers();
+        resetVoiceState();
+    }, [disposeLocalVoice, disposeAllPeers, resetVoiceState]);
+
+    // ── Effects ──────────────────────────────────────────────────────
 
     useEffect(() => cleanup, [cleanup]);
 
     useEffect(() => {
-        if (!userId || !isJoined) return;
+        if (!user?.id || !isJoined) return;
         const onBeforeUnload = () => { cleanup(); };
         window.addEventListener('beforeunload', onBeforeUnload);
         return () => window.removeEventListener('beforeunload', onBeforeUnload);
-    }, [userId, isJoined, cleanup]);
+    }, [user?.id, isJoined, cleanup]);
+
+    // ── Actions ──────────────────────────────────────────────────────
 
     const join = useCallback(async () => {
-        const u = userRef.current;
-        if (!u || isJoined) return;
+        const currentUser = userRef.current;
+        if (!currentUser || joinStateRef.current !== 'idle') return;
+
+        setJoinState('joining');
+        let backendJoined = false;
 
         try {
-            const cfg = audioConfigRef.current;
-            const inputDeviceId = localStorage.getItem('mc-audio-input');
+            const inputDeviceId = prefsRef.current.inputDevice;
             const audioConstraints = {
-                echoCancellation: cfg.echo_cancellation,
-                noiseSuppression: cfg.noise_suppression,
-                autoGainControl: cfg.auto_gain_control,
+                echoCancellation: audioConfig.echo_cancellation,
+                noiseSuppression: audioConfig.noise_suppression,
+                autoGainControl: audioConfig.auto_gain_control,
                 ...(inputDeviceId ? { deviceId: { exact: inputDeviceId } } : {}),
             };
             const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
             streamRef.current = stream;
 
-            const res = await authedFetch(`${API_BASE}/voice/join`, {
+            const response = await authedFetch(`${API_BASE}/voice/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
             });
-            if (!res.ok) throw new Error('Join failed');
+            if (!response.ok) throw new Error('Join failed');
+            backendJoined = true;
 
-            const { participants: pList } = await res.json();
-            setParticipants(pList);
-            setIsJoined(true);
+            const { participants: participantList } = await response.json();
+            setParticipants(participantList);
+            setJoinState('joined');
 
             startVad();
-
-            for (const p of pList) {
-                const pid = p.user_id || p.id;
-                if (pid === u.id) continue;
-                await sendOffer(pid);
-            }
+            await sendOffersToParticipants(participantList, currentUser.id);
         } catch (err) {
             console.error('Voice join error:', err);
             cleanup();
+            if (backendJoined) {
+                await authedFetch(`${API_BASE}/voice/leave`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                }).catch(() => {});
+            }
+            setJoinState('idle');
         }
-    }, [isJoined, cleanup, sendOffer, startVad]);
+    }, [cleanup, startVad, sendOffersToParticipants, prefsRef, audioConfig, userRef, joinStateRef, setParticipants]);
 
     const leave = useCallback(async () => {
-        const u = userRef.current;
-        if (!u) return;
+        const currentUser = userRef.current;
+        if (!currentUser) return;
 
+        setJoinState('leaving');
         cleanup();
 
         await authedFetch(`${API_BASE}/voice/leave`, {
@@ -411,26 +190,37 @@ export function useVoice(user) {
             body: JSON.stringify({}),
         }).catch(() => {});
 
-        setIsJoined(false);
+        setJoinState('idle');
         await fetchParticipants();
-    }, [fetchParticipants, cleanup]);
+    }, [fetchParticipants, cleanup, userRef]);
 
     const toggleMute = useCallback(() => {
         setIsMuted((prev) => {
             const next = !prev;
-            gateAudioToPeers(!next && vadSpeakingRef.current);
+            if (next && vadSpeakingRef.current) {
+                gateAudioToPeers(false);
+                send('voice_speaking', { speaking: false });
+                setIsSpeaking(false);
+            } else if (!next && vadSpeakingRef.current) {
+                gateAudioToPeers(true);
+                send('voice_speaking', { speaking: true });
+            }
             send('voice_mute', { muted: next });
             return next;
         });
-    }, [send]);
+    }, [send, gateAudioToPeers]);
 
-    const setVolume = useCallback((uid, volume) => {
-        const entry = audioElementsRef.current.get(uid);
-        if (entry) {
-            entry.volume = volume;
-            entry.audio.volume = volume;
-        }
-    }, []);
-
-    return { participants, isJoined, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, setVolume, fetchParticipants };
+    return {
+        participants,
+        isJoined,
+        joinState,
+        isMuted,
+        isSpeaking,
+        speakingUsers,
+        join,
+        leave,
+        toggleMute,
+        setVolume,
+        fetchParticipants,
+    };
 }

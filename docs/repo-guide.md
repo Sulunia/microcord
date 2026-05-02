@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.8.1**.
+Version **0.8.3**.
 
 ---
 
@@ -22,10 +22,10 @@ Version **0.8.1**.
                           SQLite (WAL mode)
 ```
 
-- **Frontend** — Preact + Vite, served on port 5173. Vite proxies `/api`, `/ws`, `/uploads` to the backend.
+- **Frontend** — Preact + Vite, served on port 5173. Vite proxies `/api`, `/ws`, `/uploads` to the backend. A shared `RealtimeProvider` context owns the single WebSocket connection; all hooks consume `useRealtime()` for send/subscribe.
 - **Backend** — Python 3.12 ASGI app. Starlette wraps Connexion (OpenAPI-driven routes), a native WebSocket endpoint, and a static file mount for uploads.
 - **Database** — SQLite with WAL mode, single-writer asyncio queue for mutations, separate async session pool for reads.
-- **Voice** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay; audio flows directly between browsers via RTCPeerConnection.
+- **Voice** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay; audio flows directly between browsers via RTCPeerConnection. Frontend voice logic is split into focused modules: `use-voice.js` (orchestrator), `use-voice-mesh.js` (WebRTC peers + audio elements), `use-voice-participants.js` (participant state + WS events), `voice-sdp.js` (SDP munging), `vad-monitor.js` (VAD).
 - **Screen sharing** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay over the existing WebSocket.
 
 ---
@@ -57,7 +57,7 @@ microcord/
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
 │   │   ├── users.py            # list_users, get_user, update_user, get_online_users
 │   │   ├── voice.py            # join, leave, participants
-│   │   └── upload.py           # upload_file, upload_avatar
+│   │   └── upload.py           # upload_file, upload_avatar (thin orchestration via services/utils/)
 │   ├── database/
 │   │   ├── models.py           # SQLAlchemy models (User, Message, RefreshToken)
 │   │   └── repository.py      # Async repository (single-writer queue for SQLite safety)
@@ -65,9 +65,13 @@ microcord/
 │   │   ├── auth.py             # Access/refresh token creation, rotation, JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
-│   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling)
+│   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling); typed jobs (MessageMediaJob, AvatarJob)
 │   │   ├── voice_room.py       # In-memory voice participants, per-user mute/speaking state, single-sharer tracking
-│   │   └── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
+│   │   ├── ws_ticket.py        # One-time-use, 30-second TTL WebSocket ticket system
+│   │   └── utils/
+│   │       ├── media_validator.py  # File-type validation (extension whitelists, magic-byte inspection)
+│   │       ├── upload_storage.py   # Streaming file uploads to disk with size enforcement
+│   │       └── avatar_service.py   # Avatar upload lifecycle (validation, storage, cleanup, DB update, WS broadcast)
 │   └── ws/
 │       ├── manager.py          # Per-user WebSocket map, broadcast, send_to
 │       └── handler.py          # WS endpoint: JWT auth, chat relay, voice + screenshare signaling, presence (online/offline)
@@ -77,16 +81,26 @@ microcord/
 │   ├── index.html
 │   └── src/
 │       ├── main.jsx            # Mount <App />, import global styles
-│       ├── app.jsx             # Shell: login vs main window, hook composition, resizable sidebar, toggleable members sidebar
-│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
+│       ├── app.jsx             # Shell: login vs main window, <RealtimeProvider> wrapper, <AuthenticatedApp> with hook composition, resizable sidebar, toggleable members sidebar
+│       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size, notification sound constants; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
 │       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
 │       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
 │       ├── hooks/
-│       │   ├── use-user.js     # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
-│       │   ├── use-chat.js     # Paginated messages, WebSocket for live chat_message, owns shared ws ref, presence tracking (online user IDs)
-│       │   ├── use-voice.js    # Voice join/leave, mute toggle, VAD (AudioContext + AnalyserNode), WebRTC mesh for P2P audio, DOM-attached <audio> elements
-│       │   ├── use-screenshare.js  # WebRTC mesh, signaling over shared WS
-│       │   └── use-theme.js    # Light/dark theme toggle, persisted in localStorage
+│       │   ├── realtime.jsx        # RealtimeProvider context + useRealtime() hook; owns WS lifecycle (ticket, connect, reconnect); exposes send/subscribe/connected
+│       │   ├── webrtc-helpers.js   # createPeerMap() factory — shared peer-connection map with closePeer, closeAllPeers, sendOffer, applySignal
+│       │   ├── vad-monitor.js      # startVadMonitor(stream, { prefsRef, onSpeakingChange }) — reusable RMS-based VAD; returns { stop }
+│       │   ├── use-audio-preferences.js # useAudioPreferences() — reactive localStorage-backed audio prefs (input/output/vadSensitivity) with prefsRef for hot loops
+│       │   ├── audio-notifications.js # playNotification(url, volume) — cached notification sound playback; SOUND_ENTER_VOICE / SOUND_EXIT_VOICE constants
+│       │   ├── use-latest.js       # useLatest(value) — returns a stable ref that always holds the latest value (replaces manual ref-mirror pattern)
+│       │   ├── use-live-media-config.js # useLiveMediaConfig() — initialises LIVE_MEDIA_CONFIG once, exposes iceServers / audioConfig / screenshareConfig
+│       │   ├── voice-sdp.js        # mungeOpusSdp(sdp, bitrate, stereo) — injects Opus fmtp parameters into SDP
+│       │   ├── use-voice-mesh.js   # useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) — WebRTC mesh: peer connections, audio senders, remote audio elements, SDP munging, disposePeer/disposeAllPeers/setVolume
+│       │   ├── use-voice-participants.js # useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal }) — participant REST fetch, speakingUsers state, WS subscriptions for join/leave/mute/speaking/signal events
+│       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
+│       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs)
+│       │   ├── use-voice.js        # Thin orchestrator composing useVoiceMesh + useVoiceParticipants + VAD; join/leave state machine, mute toggle, cleanup ownership
+│       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
+│       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
 │       ├── components/
 │       │   ├── login-screen.jsx
 │       │   ├── login-screen.module.css
@@ -312,32 +326,40 @@ Starlette is provided transitively through Connexion.
 ### Image upload
 
 1. Client `POST /api/upload` with multipart file.
-2. Backend validates file extension + magic bytes (PNG/JPEG/GIF/WEBP/MP4/WEBM/MOV).
+2. `api.upload.upload_file` delegates to `MediaValidator` (extension + magic-byte check) and `UploadStorage` (streamed write with size enforcement).
 3. File saved to `uploads/` with a UUID filename.
 4. Returns `{ url: "/uploads/<uuid>.<ext>" }`.
 5. Client includes `image_url` in the subsequent `POST /api/messages`.
-6. Background `MediaManager` converts images to AVIF (scaled down to `MEDIA_IMAGE_MAX_DIMENSION`), videos to AV1/MP4 (scaled by `MEDIA_VIDEO_SCALE`), and GIFs to AV1/MP4 at original resolution (no scaling). After conversion the DB is updated and a `chat_message` WS broadcast replaces the placeholder URL.
+6. Background `MediaManager` picks up a typed `MessageMediaJob` and converts images to AVIF (scaled down to `MEDIA_IMAGE_MAX_DIMENSION`), videos to AV1/MP4 (scaled by `MEDIA_VIDEO_SCALE`), and GIFs to AV1/MP4 at original resolution (no scaling). After conversion the DB is updated and a `chat_message` WS broadcast replaces the placeholder URL.
+
+### Avatar upload
+
+1. Client `POST /api/avatar` with multipart file.
+2. `api.upload.upload_avatar` delegates to `AvatarService`, which uses `MediaValidator` (JPEG/PNG/AVIF extension + magic-byte check), `UploadStorage` (streamed write, 1 MB limit), and `MediaManager` (enqueued as typed `AvatarJob` for AVIF conversion if not already AVIF).
+3. Old avatar files for the user are deleted before the new one is saved.
+4. DB updated with new avatar URL; `user_updated` WS broadcast to all clients.
 
 ### Voice
 
-1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, audio constraints).
-2. Client `POST /api/voice/join` → backend adds user to in-memory `voice_room`, returns participant list.
-3. `voice_participant_joined` broadcast to all WS clients.
-4. Joiner creates an `RTCPeerConnection` (mesh) to each existing participant and sends SDP offers via `voice_signal`.
-5. Existing participants receive offers, create answers, and send them back via `voice_signal`.
-6. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
-7. Remote audio routed through DOM-attached `<audio>` elements (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `audio.volume`.
-8. Opus SDP munging applies configured bitrate and stereo settings from `LIVE_MEDIA_CONFIG`.
-9. Mute toggle gates audio to peers via `RTCRtpSender.replaceTrack(null)` and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
-10. Client-side VAD uses `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`) persisted in localStorage `mc-vad-sensitivity` (range 1–100, default 50, higher = more sensitive). When speaking state changes (with 90ms debounce), audio is gated to peers via `RTCRtpSender.replaceTrack(audioTrack | null)` — the local stream stays enabled so VAD always has real mic input. `voice_speaking` is also sent over WS; server broadcasts to all clients. The receiving client updates a `speakingUsers` map, which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own lightweight mic analyser to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
-11. `POST /api/voice/leave` or WS disconnect cleans up peer connections; `voice_participant_left` broadcast.
+1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, audio constraints) via `useLiveMediaConfig()`.
+2. `useVoice.join()` (orchestrator) transitions through a state machine: `idle → joining → joined` (or back to `idle` on error).
+3. On `joining`: acquire mic stream via `getUserMedia` (using constraints from `useLiveMediaConfig` and device from `useAudioPreferences`), then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
+4. `voice_participant_joined` broadcast to all WS clients.
+5. Joiner sends SDP offers via `useVoiceMesh.sendOffersToParticipants()` — creates an `RTCPeerConnection` (mesh) to each existing participant through `createPeerMap()` from `webrtc-helpers.js`. SDP is munged via `voice-sdp.js` (`mungeOpusSdp`) to apply Opus bitrate/stereo settings.
+6. Existing participants receive offers, create answers, and send them back via `voice_signal`.
+7. Audio flows peer-to-peer (WebRTC). Backend only relays signaling messages, never audio data.
+8. Remote audio routed through hidden DOM `<audio>` elements managed by `useVoiceMesh` (autoplay + `playsinline`). Chrome `NotAllowedError` retried on next user gesture. Per-user volume via `setVolume`.
+9. `useVoiceParticipants` subscribes to WS events for participant lifecycle (join/leave), mute state, speaking state, and incoming voice signals — dispatching to `useVoiceMesh` for peer disposal and signal handling.
+10. Mute toggle gates audio to peers via `RTCRtpSender.replaceTrack(null)` and sends `voice_mute` over WS; server broadcasts mute state to all clients, which renders a 🔇 icon next to the muted user in the participant list. Mute state resets on voice leave.
+11. Client-side VAD uses `startVadMonitor()` (from `vad-monitor.js`) which creates an `AudioContext` + `AnalyserNode` on the local mic stream in a `requestAnimationFrame` loop. RMS volume is compared against a logarithmic sensitivity threshold (via `computeVadThreshold` — range `10⁻⁴` to `10⁻¹`). Sensitivity is read from `useAudioPreferences().prefsRef` (no localStorage reads in the hot loop). When speaking state changes (with rising/falling debounce), `onSpeakingChange` fires — in `useVoice` this gates audio to peers via `gateAudioToPeers()` and sends `voice_speaking` over WS. **When muted, speaking events are suppressed**: VAD still runs on real mic input, but `voice_speaking { speaking: true }` is never sent to peers and the local `isSpeaking` state stays false. Muting while already speaking immediately sends `voice_speaking { speaking: false }`. The receiving client updates a `speakingUsers` map (in `useVoiceParticipants`), which drives a green pulse ring animation on the speaking user's avatar. VAD sensitivity is adjustable via a slider in the profile modal; the modal runs its own `startVadMonitor` instance to show a live 🟢/🔴 indicator regardless of voice join state. Speaking state resets on voice leave.
+12. `useVoice.leave()` transitions `joined → leaving → idle`, cleans up all peer connections/VAD/stream via the orchestrator's `cleanup()` (composing `disposeLocalVoice` + `disposeAllPeers` + `resetVoiceState`), then calls `POST /api/voice/leave`. `voice_participant_left` broadcast.
 
 ### Screen sharing
 
 1. Sharer sends `screenshare_start` over WS → backend checks single-sharer constraint.
 2. If allowed, broadcasts `screenshare_start` to all clients.
 3. Viewers send `screenshare_request` → relayed to sharer.
-4. Sharer creates WebRTC peer connection, sends SDP offer via `screenshare_signal`.
+4. Sharer creates WebRTC peer connection (via `createPeerMap`), sends SDP offer via `screenshare_signal`.
 5. All signaling (offers, answers, ICE candidates) relayed through backend WS.
 6. Media flows peer-to-peer (WebRTC). Backend never touches video/audio data.
 7. `screenshare_stop` on disconnect or explicit stop; backend clears sharer state.
@@ -347,7 +369,7 @@ Starlette is provided transitively through Connexion.
 1. When a client's WebSocket connects, the server sends `presence_init` with `{ user_ids }` — the full list of currently connected user IDs — to that client only.
 2. The server broadcasts `presence_online` with `{ user_id }` to all other connected clients.
 3. When a client's WebSocket disconnects, the server broadcasts `presence_offline` with `{ user_id }` to all remaining connected clients.
-4. `use-chat.js` tracks `onlineUserIds` state from these events and exposes it to the UI.
+4. `use-chat.js` subscribes to presence events via `useRealtime()` and tracks `onlineUserIds` state from these events.
 5. `MembersSidebar` displays all users from `usersMap`, grouped by online/offline, with green/gray status dots.
 6. `GET /api/users` now includes an `online` boolean per user; `GET /api/users/online` returns just the online user IDs.
 
@@ -430,7 +452,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Registration passphrase | 6-digit hex uppercase secret required to register; auto-generated and logged on startup, override via `REGISTRATION_PASSPHRASE` env var |
 | WS message size limit | Inbound WebSocket messages exceeding 64 KB are dropped |
 | CORS lockdown | Restricted to `CORS_ORIGIN` (default `http://localhost:5173`) |
-| Upload validation | File extension check + magic byte verification (PNG/JPEG/GIF/WEBP) |
+| Upload validation | File extension check + magic byte verification via `MediaValidator` (PNG/JPEG/GIF/WEBP/MP4/WEBM/MOV for uploads; JPEG/PNG/AVIF for avatars) |
 | Upload size limits | Chat images: 50 MB (`MAX_UPLOAD_SIZE_BYTES`), avatars: 1 MB (`MAX_AVATAR_SIZE_BYTES`) |
 | Image URL validation | Only `/uploads/`-prefixed URLs accepted in messages and avatars |
 | Password storage | bcrypt hashing via `bcrypt >=4.0` |

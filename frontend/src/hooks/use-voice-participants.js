@@ -1,0 +1,89 @@
+import { useState, useCallback, useEffect } from 'preact/hooks';
+import { API_BASE, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from '../constants.js';
+import { authedFetch } from './use-user.js';
+import { useRealtime } from './realtime.jsx';
+import { playNotification } from './audio-notifications.js';
+
+/**
+ * Manages voice participant state and WS subscriptions for
+ * participant lifecycle events (join, leave, mute, speaking, etc.).
+ *
+ * @param {object} options
+ * @param {import('preact/hooks').MutableRef<string>} options.joinStateRef — latest joinState
+ * @param {(userId: string) => void} options.onParticipantLeft — dispose peer for leaving user
+ * @param {(fromId: string, signal: object) => void} options.onSignal — apply incoming voice signal
+ * @param {() => void} [options.onRefreshScreenshare] — notify screenshare hook
+ */
+export function useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal }) {
+    const [participants, setParticipants] = useState([]);
+    const [speakingUsers, setSpeakingUsers] = useState(new Map());
+
+    const { subscribe } = useRealtime();
+
+    /** Fetch the current participant list from the REST API. */
+    const fetchParticipants = useCallback(async () => {
+        try {
+            const response = await authedFetch(`${API_BASE}/voice/participants`);
+            if (response.ok) setParticipants(await response.json());
+        } catch {}
+    }, []);
+
+    useEffect(() => { fetchParticipants(); }, [fetchParticipants]);
+
+    useEffect(() => {
+        const unsubs = [
+            subscribe('voice_participant_joined', () => {
+                if (joinStateRef.current === 'joined') {
+                    playNotification(SOUND_ENTER_VOICE, 0.7);
+                }
+                fetchParticipants();
+            }),
+            subscribe('voice_participant_left', (data) => {
+                if (joinStateRef.current === 'joined') {
+                    playNotification(SOUND_EXIT_VOICE, 0.55);
+                }
+                onParticipantLeft(data.user_id);
+                fetchParticipants();
+            }),
+            subscribe('voice_signal', (data) => {
+                if (joinStateRef.current === 'joined') {
+                    onSignal(data.from, data.signal);
+                }
+            }),
+            subscribe('voice_mute', (data) => {
+                const { user_id: muteUserId, muted } = data;
+                setParticipants((prev) =>
+                    prev.map((participant) => {
+                        const participantId = participant.user_id || participant.id;
+                        return participantId === muteUserId ? { ...participant, muted } : participant;
+                    }),
+                );
+            }),
+            subscribe('voice_speaking', (data) => {
+                const { user_id: speakUserId, speaking } = data;
+                setSpeakingUsers((prev) => {
+                    const next = new Map(prev);
+                    next.set(speakUserId, speaking);
+                    return next;
+                });
+            }),
+            subscribe('screenshare_start', () => fetchParticipants()),
+            subscribe('screenshare_stop', () => fetchParticipants()),
+            subscribe('user_updated', () => fetchParticipants()),
+        ];
+        return () => unsubs.forEach((unsub) => unsub());
+    }, [subscribe, fetchParticipants, onParticipantLeft, onSignal, joinStateRef]);
+
+    /** Reset speaking state (called on voice leave). */
+    const resetSpeakingUsers = useCallback(() => {
+        setSpeakingUsers(new Map());
+    }, []);
+
+    return {
+        participants,
+        setParticipants,
+        speakingUsers,
+        resetSpeakingUsers,
+        fetchParticipants,
+    };
+}

@@ -3,7 +3,9 @@ import styles from './sidebar.module.css';
 import { TICK_SOUNDS, APP_VERSION } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
 import { useTheme } from '../../hooks/use-theme.js';
-import { computeVadThreshold } from '../../hooks/use-voice.js';
+import { useAudioPreferences } from '../../hooks/use-audio-preferences.js';
+import { startVadMonitor } from '../../hooks/vad-monitor.js';
+import { playNotification } from '../../hooks/audio-notifications.js';
 
 const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
 const AVATAR_ACCEPT = 'image/jpeg,image/png,image/avif';
@@ -18,83 +20,52 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
   const [avatarError, setAvatarError] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
   const [audioDevices, setAudioDevices] = useState({ inputs: [], outputs: [] });
-  const [selectedInput, setSelectedInput] = useState(() => localStorage.getItem('mc-audio-input') || '');
-  const [selectedOutput, setSelectedOutput] = useState(() => localStorage.getItem('mc-audio-output') || '');
   const [selectedTick, setSelectedTick] = useState(1);
-  const [vadSensitivity, setVadSensitivity] = useState(() => parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50);
+  const [micDetected, setMicDetected] = useState(false);
+  const {
+    inputDevice: selectedInput,
+    outputDevice: selectedOutput,
+    vadSensitivity,
+    prefsRef,
+    setInput: setSelectedInput,
+    setOutput: setSelectedOutput,
+    setVadSensitivity,
+  } = useAudioPreferences();
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
-  const tickAudioRef = useRef(null);
-  const [micDetected, setMicDetected] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
-    let cancelled = false;
-    let audioCtx = null;
-    let analyser = null;
+    let monitor = null;
     let stream = null;
-    let rafId = null;
-    let speaking = false;
-    let lastChange = 0;
 
     const start = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch { return; }
-      if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
 
-      audioCtx = new AudioContext();
-      const source = audioCtx.createMediaStreamSource(stream);
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.3;
-      source.connect(analyser);
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-
-      const data = new Uint8Array(analyser.fftSize);
-
-      const tick = () => {
-        if (cancelled) return;
-        analyser.getByteTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) {
-          const v = (data[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / data.length);
-        const sensitivity = parseInt(localStorage.getItem('mc-vad-sensitivity'), 10) || 50;
-        const threshold = computeVadThreshold(sensitivity);
-        const now = performance.now();
-        const loud = rms > threshold;
-        if (loud !== speaking) {
-          const debounceMs = loud && !speaking ? 35 : 150;
-          if (now - lastChange >= debounceMs) {
-            speaking = loud;
-            lastChange = now;
-            setMicDetected(speaking);
-          }
-        } else {
-          lastChange = now;
-        }
-        rafId = requestAnimationFrame(tick);
-      };
-      rafId = requestAnimationFrame(tick);
+      monitor = startVadMonitor(stream, {
+        prefsRef,
+        onSpeakingChange(speaking) {
+          setMicDetected(speaking);
+        },
+        risingDebounceMs: 22,
+        fallingDebounceMs: 170,
+      });
     };
 
     start();
 
     return () => {
-      cancelled = true;
-      if (rafId) cancelAnimationFrame(rafId);
-      if (audioCtx) audioCtx.close().catch(() => {});
+      if (monitor) monitor.stop();
       if (stream) stream.getTracks().forEach(t => t.stop());
       setMicDetected(false);
     };
-  }, [isOpen]);
+  }, [isOpen, prefsRef]);
 
   useEffect(() => {
     if (!isOpen) return;
-    setDisplayName(user?.display_name ?? user?.name ?? '');
+    setDisplayName(user?.display_name ?? '');
     setAvatarPreview(null);
     setAvatarFile(null);
     setAvatarError(null);
@@ -228,10 +199,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                 <select
                   id="audio-input"
                   value={selectedInput}
-                  onChange={(e) => {
-                    setSelectedInput(e.target.value);
-                    localStorage.setItem('mc-audio-input', e.target.value);
-                  }}
+                  onChange={(e) => setSelectedInput(e.target.value)}
                 >
                   <option value="">Default</option>
                   {audioDevices.inputs.map((d) => (
@@ -246,10 +214,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                 <select
                   id="audio-output"
                   value={selectedOutput}
-                  onChange={(e) => {
-                    setSelectedOutput(e.target.value);
-                    localStorage.setItem('mc-audio-output', e.target.value);
-                  }}
+                  onChange={(e) => setSelectedOutput(e.target.value)}
                 >
                   <option value="">Default</option>
                   {audioDevices.outputs.map((d) => (
@@ -272,7 +237,6 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                 onInput={(e) => {
                   const val = parseInt(e.target.value, 10);
                   setVadSensitivity(val);
-                  localStorage.setItem('mc-vad-sensitivity', String(val));
                 }}
               />
             </div>
@@ -287,16 +251,10 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                       name="tick_sound"
                       value={t.id}
                       checked={selectedTick === t.id}
-                      onChange={() => {
-                        setSelectedTick(t.id);
-                        if (tickAudioRef.current) {
-                          tickAudioRef.current.pause();
-                          tickAudioRef.current.currentTime = 0;
-                        }
-                        const a = new Audio(t.url);
-                        tickAudioRef.current = a;
-                        a.play().catch(() => {});
-                      }}
+                        onChange={() => {
+                          setSelectedTick(t.id);
+                          playNotification(t.url, 0.7);
+                        }}
                     />
                     <label for={`tick-${t.id}`}>{t.label}</label>
                   </div>

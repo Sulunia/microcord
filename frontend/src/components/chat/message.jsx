@@ -65,7 +65,7 @@ function TrashIcon() {
 
 function MessageInner({ message, grouped, animate, deletable, onDelete }) {
   const { author, content, image_url, image, created_at, timestamp, pending } = message;
-  const name = author?.display_name ?? author?.name ?? 'Unknown';
+  const name = author?.display_name ?? 'Unknown';
   const initial = name.charAt(0).toUpperCase();
   const html = useMemo(
     () => renderMd(content),

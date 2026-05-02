@@ -26,7 +26,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(user_id, websocket)
 
     user_obj = await repo.get_user_by_id(user_id)
-    user_data = user_obj.to_dict() if user_obj else {"id": user_id}
+    user_data = user_obj.to_public_dict() if user_obj else {"id": user_id}
 
     await ws_manager.send_to(user_id, {
         "type": "presence_init",

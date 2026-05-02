@@ -2,6 +2,7 @@ import { createContext } from 'preact';
 import { useState, useEffect, useCallback, useRef, useContext } from 'preact/hooks';
 import { API_BASE, WS_URL } from '../constants.js';
 import { authedFetch } from './use-user.js';
+import { useLatest } from './use-latest.js';
 
 /**
  * Shared context for the realtime WebSocket layer.
@@ -23,9 +24,7 @@ export function RealtimeProvider({ user, children }) {
   const socketRef = useRef(/** @type {WebSocket | null} */ (null));
   const reconnectTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
   const subscribersRef = useRef(new Map());
-  const userRef = useRef(user);
-
-  useEffect(() => { userRef.current = user; }, [user]);
+  const userRef = useLatest(user);
 
   /**
    * Dispatch an incoming message to all subscribers registered for its type.

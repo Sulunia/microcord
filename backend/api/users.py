@@ -1,29 +1,20 @@
 import logging
 
 from connexion.lifecycle import ConnexionResponse
-from connexion import request as connexion_request
 
 from constants import DISPLAY_NAME_MAX_LENGTH
 from database.models import TICK_SOUNDS
 from database.repository import repo
+from services.utils.request_context import current_user_id
 from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
 
-def _get_current_user_id() -> str | None:
-    try:
-        scope = connexion_request.scope
-        return scope.get("state", {}).get("current_user", {}).get("id")
-    except Exception:
-        logger.exception("Failed to get current user ID")
-        return None
-
-
 async def list_users() -> list[dict]:
     users = await repo.list_users()
     online_ids = set(ws_manager.connected_user_ids)
-    return [{**u.to_dict(), "online": u.id in online_ids} for u in users]
+    return [{**u.to_public_dict(), "online": u.id in online_ids} for u in users]
 
 
 async def get_online_users() -> dict:
@@ -34,11 +25,14 @@ async def get_user(user_id: str) -> ConnexionResponse:
     user = await repo.get_user_by_id(user_id)
     if not user:
         return ConnexionResponse(status_code=404, body={"error": "User not found"})
-    return user.to_dict()
+    jwt_user_id = current_user_id()
+    if jwt_user_id and jwt_user_id == user_id:
+        return user.to_dict()
+    return user.to_public_dict()
 
 
 async def update_user(user_id: str, body: dict) -> ConnexionResponse:
-    jwt_user_id = _get_current_user_id()
+    jwt_user_id = current_user_id()
     if jwt_user_id != user_id:
         return ConnexionResponse(status_code=403, body={"error": "Cannot modify another user's profile"})
 
@@ -62,7 +56,7 @@ async def update_user(user_id: str, body: dict) -> ConnexionResponse:
     result = user.to_dict()
     await ws_manager.broadcast({
         "type": "user_updated",
-        "data": {"user_id": user_id, "user": result},
+        "data": {"user_id": user_id, "user": user.to_public_dict()},
     })
 
     logger.info(f"User updated: {result['display_name']} ({result['id']})")

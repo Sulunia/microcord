@@ -258,6 +258,63 @@ class BackendRepository:
                 rt.revoked_at = now
         return await self._enqueue_write(_write)
 
+    async def rotate_refresh_token_hash(
+        self,
+        old_hash: str,
+        new_hash: str,
+        new_expires_at,
+    ) -> RefreshToken | None:
+        """Atomically consume an old refresh token and store its replacement.
+
+        Returns the new :class:`RefreshToken` row on success, or ``None`` if
+        the old token was missing, already consumed, revoked, or expired.
+        If reuse is detected (old token already consumed), all refresh tokens
+        for the associated user are revoked.
+        """
+        async def _write(session):
+            from sqlalchemy import update
+
+            result = await session.execute(
+                select(RefreshToken).where(RefreshToken.token_hash == old_hash)
+            )
+            rt = result.scalar_one_or_none()
+            if rt is None:
+                return None
+
+            now = datetime.utcnow()
+
+            if rt.revoked_at is not None or rt.expires_at < now:
+                return None
+
+            if rt.consumed:
+                logger.warning(
+                    "Refresh token reuse detected for user %s — revoking all",
+                    rt.user_id,
+                )
+                await session.execute(
+                    update(RefreshToken)
+                    .where(
+                        RefreshToken.user_id == rt.user_id,
+                        RefreshToken.revoked_at.is_(None),
+                    )
+                    .values(revoked_at=now)
+                )
+                return None
+
+            rt.consumed = True
+
+            new_rt = RefreshToken(
+                user_id=rt.user_id,
+                token_hash=new_hash,
+                expires_at=new_expires_at,
+            )
+            session.add(new_rt)
+            await session.flush()
+            await session.refresh(new_rt)
+            return new_rt
+
+        return await self._enqueue_write(_write)
+
     async def prune_expired_refresh_tokens(self) -> int:
         async def _write(session):
             now = datetime.utcnow()

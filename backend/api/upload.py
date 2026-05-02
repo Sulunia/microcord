@@ -1,129 +1,21 @@
-import asyncio
 import logging
 import os
 import uuid
 
 from connexion.lifecycle import ConnexionResponse
-from connexion import request as connexion_request
 
-from constants import UPLOAD_DIR, MAX_UPLOAD_SIZE_BYTES, MAX_AVATAR_SIZE_BYTES, UPLOAD_CHUNK_SIZE
-from database.repository import repo
+from constants import UPLOAD_DIR, MAX_UPLOAD_SIZE_BYTES
 from services.guard import guard
-from services.media_manager import media_manager
-from ws.manager import ws_manager
+from services.utils.request_context import current_user_id
+from services.utils.media_validator import media_validator
+from services.utils.avatar_service import avatar_service
+from services.utils.upload_storage import upload_storage
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".webm", ".mov"}
-
-MAGIC_BYTES = {
-    b"\x89PNG": {".png"},
-    b"\xff\xd8\xff": {".jpg", ".jpeg"},
-    b"GIF8": {".gif"},
-    b"\x00\x00\x00": {".mp4", ".mov"},
-    b"\x1a\x45\xdf\xa5": {".webm"},
-}
-
-WEBP_MAGIC = b"RIFF"
-WEBP_SIGNATURE = b"WEBP"
-
-AVATAR_ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".avif"}
-
-AVATAR_EXT_TO_MIME = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".avif": "image/avif",
-}
-
-AVATAR_DIR = os.path.join(UPLOAD_DIR, "avatars")
-
-
-def _validate_magic(contents: bytes, ext: str) -> bool:
-    if ext in {".mp4", ".mov"}:
-        if len(contents) >= 8 and contents[4:8] == b"ftyp":
-            return True
-        return False
-    if ext == ".webp" and len(contents) >= 12:
-        return contents[:4] == WEBP_MAGIC and contents[8:12] == WEBP_SIGNATURE
-    for magic, exts in MAGIC_BYTES.items():
-        if contents[:len(magic)] == magic:
-            return ext in exts
-    return False
-
-
-def _validate_avatar_magic(contents: bytes, ext: str) -> bool:
-    if ext in {".jpg", ".jpeg"} and contents[:3] == b"\xff\xd8\xff":
-        return True
-    if ext == ".png" and contents[:4] == b"\x89PNG":
-        return True
-    if ext == ".avif" and len(contents) >= 12 and contents[4:12] == b"ftypavif":
-        return True
-    return False
-
-
-def _get_current_user_id() -> str | None:
-    try:
-        scope = connexion_request.scope
-        return scope.get("state", {}).get("current_user", {}).get("id")
-    except Exception:
-        logger.exception("Failed to get current user ID")
-        return None
-
-
-async def _stream_file(file, max_bytes: int, dest_dir: str, dest_filename: str) -> tuple[bytes, str] | None:
-    content_length = connexion_request.headers.get("content-length")
-    if content_length is not None:
-        try:
-            if int(content_length) > max_bytes:
-                return None
-        except ValueError:
-            pass
-
-    chunk_size = UPLOAD_CHUNK_SIZE
-    first_bytes = b""
-    total = 0
-
-    os.makedirs(dest_dir, exist_ok=True)
-    dest_path = os.path.join(dest_dir, dest_filename)
-    tmp_path = dest_path + ".tmp"
-
-    try:
-        with open(tmp_path, "wb") as f:
-            while True:
-                chunk = file.read(chunk_size)
-                if asyncio.iscoroutine(chunk):
-                    chunk = await chunk
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > max_bytes:
-                    os.remove(tmp_path)
-                    return None
-                if not first_bytes:
-                    first_bytes = chunk
-                f.write(chunk)
-        os.rename(tmp_path, dest_path)
-        return first_bytes, dest_path
-    except Exception:
-        logger.exception(f"Failed to stream file to {dest_path}")
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        raise
-
-
-def _delete_old_avatar(user_id: str):
-    if not os.path.isdir(AVATAR_DIR):
-        return
-    prefix = f"{user_id}_"
-    for entry in os.listdir(AVATAR_DIR):
-        name, dot_ext = os.path.splitext(entry)
-        if name.startswith(prefix) and dot_ext.lower() in AVATAR_ALLOWED_EXTENSIONS:
-            os.remove(os.path.join(AVATAR_DIR, entry))
-
 
 async def upload_file(file) -> ConnexionResponse:
-    user_id = _get_current_user_id()
+    user_id = current_user_id()
     if user_id:
         rl = guard.check_upload(user_id)
         if rl is not None:
@@ -136,18 +28,18 @@ async def upload_file(file) -> ConnexionResponse:
         return ConnexionResponse(status_code=400, body={"error": "No file provided"})
 
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
+    if not media_validator.validate_upload_extension(ext):
         return ConnexionResponse(status_code=400, body={"error": f"Invalid file type: {ext}"})
 
     filename = f"{uuid.uuid4().hex}{ext}"
 
-    result = await _stream_file(file, MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR, filename)
+    result = await upload_storage.stream_file(file, MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR, filename)
     if result is None:
         return ConnexionResponse(status_code=413, body={"error": "File too large"})
 
     first_bytes, filepath = result
 
-    if not _validate_magic(first_bytes, ext):
+    if not media_validator.validate_upload_magic(first_bytes, ext):
         os.remove(filepath)
         return ConnexionResponse(status_code=400, body={"error": "File contents do not match extension"})
 
@@ -157,54 +49,8 @@ async def upload_file(file) -> ConnexionResponse:
 
 
 async def upload_avatar(file) -> ConnexionResponse:
-    user_id = _get_current_user_id()
+    user_id = current_user_id()
     if not user_id:
         return ConnexionResponse(status_code=401, body={"error": "Not authenticated"})
 
-    rl = guard.check_upload(user_id)
-    if rl is not None:
-        return ConnexionResponse(
-            status_code=429,
-            body={"error": f"Too many uploads. Try again in {int(rl)} seconds."},
-        )
-
-    if not file or not file.filename:
-        return ConnexionResponse(status_code=400, body={"error": "No file provided"})
-
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in AVATAR_ALLOWED_EXTENSIONS:
-        return ConnexionResponse(
-            status_code=400,
-            body={"error": f"Invalid file type: {ext}. Allowed: JPEG, PNG, AVIF"},
-        )
-
-    _delete_old_avatar(user_id)
-    filename = f"{user_id}_{uuid.uuid4().hex}{ext}"
-
-    result = await _stream_file(file, MAX_AVATAR_SIZE_BYTES, AVATAR_DIR, filename)
-    if result is None:
-        return ConnexionResponse(status_code=413, body={"error": "File too large (max 1 MB)"})
-
-    first_bytes, filepath = result
-
-    if not _validate_avatar_magic(first_bytes, ext):
-        os.remove(filepath)
-        return ConnexionResponse(status_code=400, body={"error": "File contents do not match extension"})
-
-    avatar_url = f"/uploads/avatars/{filename}"
-
-    if ext != ".avif":
-        await media_manager.enqueue_avatar(filepath, user_id)
-
-    user = await repo.update_user_avatar(user_id, avatar_url)
-    if user is None:
-        return ConnexionResponse(status_code=404, body={"error": "User not found"})
-
-    result = user.to_dict()
-    await ws_manager.broadcast({
-        "type": "user_updated",
-        "data": {"user_id": user_id, "user": result},
-    })
-
-    logger.info(f"Avatar updated for user {user_id}")
-    return ConnexionResponse(status_code=200, body=result)
+    return await avatar_service.upload_avatar(file, user_id)

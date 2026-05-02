@@ -96,33 +96,19 @@ async def create_refresh_token(user_id: str) -> str:
 
 
 async def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-    rt = await repo.get_refresh_token_by_hash(token_hash)
-    if not rt:
-        return None
-
-    now = datetime.utcnow()
-
-    if rt.revoked_at is not None or rt.expires_at < now:
-        return None
-
-    if rt.consumed:
-        logger.warning(
-            "Refresh token reuse detected for user %s — revoking all refresh tokens",
-            rt.user_id,
-        )
-        await repo.revoke_all_refresh_tokens_for_user(rt.user_id)
-        return None
-
-    user = await repo.get_user_by_id(rt.user_id)
-    if not user:
-        return None
+    old_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
     new_raw = secrets.token_urlsafe(48)
     new_hash = hashlib.sha256(new_raw.encode()).hexdigest()
-    new_expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS)
-    await repo.store_refresh_token(rt.user_id, new_hash, new_expires_at)
-    await repo.consume_refresh_token(rt.id)
+    new_expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS)
+
+    new_rt = await repo.rotate_refresh_token_hash(old_hash, new_hash, new_expires_at)
+    if new_rt is None:
+        return None
+
+    user = await repo.get_user_by_id(new_rt.user_id)
+    if not user:
+        return None
 
     access_token = create_access_token(user.id, user.name)
     return access_token, new_raw
