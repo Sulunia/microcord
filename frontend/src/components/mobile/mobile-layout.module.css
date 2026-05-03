@@ -4,6 +4,17 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  background: var(--mc-bg);
+}
+
+.container :global(textarea) {
+  font-size: 0.82rem;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.container :global(textarea::placeholder) {
+  font-size: 0.82rem;
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
 .tabBar {
