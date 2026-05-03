@@ -7,14 +7,24 @@
   background: var(--mc-bg);
 }
 
-.container :global(textarea) {
-  font-size: 0.82rem;
-  font-family: system-ui, -apple-system, sans-serif;
+.container :global(textarea.textarea) {
+  font-size: 0.78rem !important;
+  font-family: "Segoe UI", Tahoma, sans-serif !important;
+  padding: 3px 5px !important;
+  min-height: 22px !important;
 }
 
-.container :global(textarea::placeholder) {
-  font-size: 0.82rem;
-  font-family: system-ui, -apple-system, sans-serif;
+.container :global(textarea.textarea::placeholder) {
+  font-size: 0.78rem;
+}
+
+.container :global(button.attachBtn) {
+  width: 24px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  aspect-ratio: 1 / 1;
 }
 
 .tabBar {
