@@ -121,7 +121,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
               <span class={styles.profileSubtext}>Click to edit display name</span>
             </span>
           </button>
-          {isJoined && (
+        {isJoined && (
             <button
               class={`${styles.muteBtn} ${isMuted ? styles.muteBtnActive : ''}`}
               onClick={toggleMute}
@@ -138,7 +138,7 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
         >
           {joinState === 'joining' ? 'Joining…' : joinState === 'leaving' ? 'Leaving…' : isJoined ? 'Disconnect' : 'Join Voice'}
         </button>
-        {isJoined && (
+        {isJoined && screenshare?.screenshareSupported && (
           <button
             class={`${styles.shareBtn} ${screenshare?.isSharing ? styles.shareBtnActive : ''}`}
             onClick={screenshare?.isSharing ? screenshare.stopSharing : screenshare?.startSharing}

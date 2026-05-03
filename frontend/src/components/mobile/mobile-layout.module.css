@@ -8,14 +8,14 @@
 }
 
 .container :global(textarea.textarea) {
-  font-size: 0.78rem !important;
+  font-size: 0.72rem !important;
   font-family: "Segoe UI", Tahoma, sans-serif !important;
   padding: 3px 5px !important;
-  min-height: 22px !important;
+  min-height: 20px !important;
 }
 
 .container :global(textarea.textarea::placeholder) {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .container :global(button.attachBtn) {
@@ -71,6 +71,7 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  padding-bottom: 6px;
 }
 
 .videoSection {

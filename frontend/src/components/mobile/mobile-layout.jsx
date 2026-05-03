@@ -105,7 +105,7 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
         >
           {joinState === 'joining' ? 'Joining…' : joinState === 'leaving' ? 'Leaving…' : isJoined ? 'Disconnect' : 'Join Voice'}
         </button>
-        {isJoined && (
+        {isJoined && screenshare?.screenshareSupported && (
           <button
             class={`${styles.voiceShareBtn} ${screenshare?.isSharing ? styles.voiceShareBtnActive : ''}`}
             onClick={screenshare?.isSharing ? screenshare.stopSharing : screenshare?.startSharing}
@@ -312,19 +312,22 @@ function MobileChatTab({ chat, screenshare, currentUser }) {
   );
 }
 
-const TABS = [
-  { id: 'chat', label: '# Chat' },
-  { id: 'voice', label: '🎤 Voice' },
-  { id: 'users', label: '👥 Users' },
-];
-
 export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout }) {
   const [activeTab, setActiveTab] = useState('chat');
+
+  const voiceCount = voice.participants.length;
+  const onlineCount = chat.onlineUserIds ? chat.onlineUserIds.size : 0;
+
+  const tabs = [
+    { id: 'chat', label: '# Chat' },
+    { id: 'voice', label: voiceCount > 0 ? `🎤 Voice (${voiceCount})` : '🎤 Voice' },
+    { id: 'users', label: `👥 Users (${onlineCount})` },
+  ];
 
   return (
     <div class={styles.container}>
       <div class={styles.tabBar}>
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             class={`${styles.tab} ${activeTab === tab.id ? styles.tabActive : ''}`}
