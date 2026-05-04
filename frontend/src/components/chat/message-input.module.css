@@ -53,6 +53,9 @@
   flex-shrink: 0;
   cursor: pointer;
   padding: 0;
+  border: none;
+  background: none;
+  box-sizing: border-box;
 }
 
 .fileInput {

@@ -15,7 +15,7 @@ export const AUDIO_INPUT_KEY = 'mc-audio-input';
 export const AUDIO_OUTPUT_KEY = 'mc-audio-output';
 export const VAD_SENSITIVITY_KEY = 'mc-vad-sensitivity';
 
-export const APP_VERSION = '0.8.3';
+export const APP_VERSION = '0.8.4';
 
 export const CHAT_PAGE_SIZE = 30;
 

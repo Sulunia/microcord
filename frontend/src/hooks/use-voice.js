@@ -146,8 +146,15 @@ export function useVoice(user) {
                 autoGainControl: audioConfig.auto_gain_control,
                 ...(inputDeviceId ? { deviceId: { exact: inputDeviceId } } : {}),
             };
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-            streamRef.current = stream;
+
+            let noInputDevice = false;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+                streamRef.current = stream;
+            } catch (micErr) {
+                console.warn('No input device available, joining muted:', micErr.message || micErr);
+                noInputDevice = true;
+            }
 
             const response = await authedFetch(`${API_BASE}/voice/join`, {
                 method: 'POST',
@@ -161,7 +168,13 @@ export function useVoice(user) {
             setParticipants(participantList);
             setJoinState('joined');
 
-            startVad();
+            if (noInputDevice) {
+                setIsMuted(true);
+                send('voice_mute', { muted: true });
+            } else {
+                startVad();
+            }
+
             await sendOffersToParticipants(participantList, currentUser.id);
         } catch (err) {
             console.error('Voice join error:', err);

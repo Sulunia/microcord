@@ -7,7 +7,7 @@
  */
 export function computeVadThreshold(sensitivity) {
     const clamped = Math.max(1, Math.min(100, sensitivity));
-    return Math.pow(10, -4 + (100 - clamped) / 100 * 3);
+    return Math.pow(10, -4 + Math.sqrt((100 - clamped) / 99) * 3);
 }
 
 /**
@@ -44,6 +44,12 @@ export function startVadMonitor(stream, options) {
     let lastChange = 0;
     let rafId = null;
     let stopped = false;
+    let currentSensitivity = prefsRef?.current?.vadSensitivity ?? 50;
+
+    const onSensitivityChange = (e) => {
+        currentSensitivity = e.detail;
+    };
+    window.addEventListener('vad-sensitivity-change', onSensitivityChange);
 
     const audioCtx = new AudioContext();
     const source = audioCtx.createMediaStreamSource(stream);
@@ -57,8 +63,7 @@ export function startVadMonitor(stream, options) {
 
     function resolveThreshold(now) {
         if (getThreshold) return getThreshold(now);
-        const sensitivity = prefsRef.current.vadSensitivity;
-        return computeVadThreshold(sensitivity);
+        return computeVadThreshold(currentSensitivity);
     }
 
     const tick = () => {
@@ -93,6 +98,7 @@ export function startVadMonitor(stream, options) {
     return {
         stop() {
             stopped = true;
+            window.removeEventListener('vad-sensitivity-change', onSensitivityChange);
             if (rafId) cancelAnimationFrame(rafId);
             audioCtx.close().catch(() => {});
         },

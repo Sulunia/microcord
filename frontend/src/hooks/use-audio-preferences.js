@@ -33,6 +33,7 @@ export function useAudioPreferences() {
         const clamped = Math.max(1, Math.min(100, value));
         localStorage.setItem(VAD_SENSITIVITY_KEY, String(clamped));
         setVadSensitivityRaw(clamped);
+        window.dispatchEvent(new CustomEvent('vad-sensitivity-change', { detail: clamped }));
     }, []);
 
     return {

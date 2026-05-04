@@ -192,6 +192,8 @@ export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
         };
     }, [cleanupLocalStream, cleanupPeerConnections]);
 
+    const screenshareSupported = typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+
     return {
         isSharing,
         isViewing,
@@ -203,5 +205,6 @@ export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
         stopSharing,
         stopViewing,
         requestStream,
+        screenshareSupported,
     };
 }
