@@ -57,7 +57,8 @@ export function startVadMonitor(stream, options) {
 
     function resolveThreshold(now) {
         if (getThreshold) return getThreshold(now);
-        const sensitivity = prefsRef.current.vadSensitivity;
+        const raw = localStorage.getItem('mc-vad-sensitivity');
+        const sensitivity = raw != null ? parseInt(raw, 10) : (prefsRef.current.vadSensitivity ?? 50);
         return computeVadThreshold(sensitivity);
     }
 
