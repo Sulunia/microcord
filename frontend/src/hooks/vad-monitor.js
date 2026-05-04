@@ -44,6 +44,12 @@ export function startVadMonitor(stream, options) {
     let lastChange = 0;
     let rafId = null;
     let stopped = false;
+    let currentSensitivity = prefsRef?.current?.vadSensitivity ?? 50;
+
+    const onSensitivityChange = (e) => {
+        currentSensitivity = e.detail;
+    };
+    window.addEventListener('vad-sensitivity-change', onSensitivityChange);
 
     const audioCtx = new AudioContext();
     const source = audioCtx.createMediaStreamSource(stream);
@@ -57,9 +63,7 @@ export function startVadMonitor(stream, options) {
 
     function resolveThreshold(now) {
         if (getThreshold) return getThreshold(now);
-        const raw = localStorage.getItem('mc-vad-sensitivity');
-        const sensitivity = raw != null ? parseInt(raw, 10) : (prefsRef.current.vadSensitivity ?? 50);
-        return computeVadThreshold(sensitivity);
+        return computeVadThreshold(currentSensitivity);
     }
 
     const tick = () => {
@@ -94,6 +98,7 @@ export function startVadMonitor(stream, options) {
     return {
         stop() {
             stopped = true;
+            window.removeEventListener('vad-sensitivity-change', onSensitivityChange);
             if (rafId) cancelAnimationFrame(rafId);
             audioCtx.close().catch(() => {});
         },
