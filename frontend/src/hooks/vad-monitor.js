@@ -7,7 +7,7 @@
  */
 export function computeVadThreshold(sensitivity) {
     const clamped = Math.max(1, Math.min(100, sensitivity));
-    return Math.pow(10, -4 + (100 - clamped) / 100 * 3);
+    return Math.pow(10, -4 + Math.sqrt((100 - clamped) / 99) * 3);
 }
 
 /**
