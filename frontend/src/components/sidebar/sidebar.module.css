@@ -431,6 +431,11 @@
   cursor: pointer;
 }
 
+.voiceBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .voiceBtnLeave {
   color: var(--mc-danger);
 }

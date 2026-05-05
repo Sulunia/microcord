@@ -21,6 +21,7 @@ const RealtimeContext = createContext(null);
  */
 export function RealtimeProvider({ user, children }) {
   const [connected, setConnected] = useState(false);
+  const [connectionId, setConnectionId] = useState(/** @type {string | null} */ (null));
   const socketRef = useRef(/** @type {WebSocket | null} */ (null));
   const reconnectTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
   const subscribersRef = useRef(new Map());
@@ -31,6 +32,9 @@ export function RealtimeProvider({ user, children }) {
    * @param {{ type: string, data: unknown }} message
    */
   const dispatch = useCallback((message) => {
+    if (message.type === 'presence_init' && message.data?.connection_id) {
+      setConnectionId(message.data.connection_id);
+    }
     const handlers = subscribersRef.current.get(message.type);
     if (handlers) {
       for (const handler of handlers) {
@@ -60,6 +64,7 @@ export function RealtimeProvider({ user, children }) {
 
       socket.onclose = () => {
         setConnected(false);
+        setConnectionId(null);
         reconnectTimerRef.current = setTimeout(connectSocket, 2000);
       };
 
@@ -118,7 +123,7 @@ export function RealtimeProvider({ user, children }) {
   }, []);
 
   return (
-    <RealtimeContext.Provider value={{ send, subscribe, connected }}>
+    <RealtimeContext.Provider value={{ send, subscribe, connected, connectionId }}>
       {children}
     </RealtimeContext.Provider>
   );
@@ -128,7 +133,7 @@ export function RealtimeProvider({ user, children }) {
  * Hook that returns the realtime context value.
  * Must be called inside a `<RealtimeProvider>`.
  *
- * @returns {{ send: (type: string, data: unknown) => void, subscribe: (type: string, handler: (data: unknown) => void) => () => void, connected: boolean }}
+ * @returns {{ send: (type: string, data: unknown) => void, subscribe: (type: string, handler: (data: unknown) => void) => () => void, connected: boolean, connectionId: string | null }}
  */
 export function useRealtime() {
   const context = useContext(RealtimeContext);

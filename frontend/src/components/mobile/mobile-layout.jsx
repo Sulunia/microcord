@@ -19,7 +19,7 @@ function getTimestamp(msg) {
 }
 
 function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute } = voice;
+  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -101,9 +101,9 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
         <button
           class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
           onClick={isJoined ? leave : join}
-          disabled={joinState === 'joining' || joinState === 'leaving'}
+          disabled={joinState === 'joining' || joinState === 'leaving' || (joinedElsewhere && !isJoined)}
         >
-          {joinState === 'joining' ? 'Joining…' : joinState === 'leaving' ? 'Leaving…' : isJoined ? 'Disconnect' : 'Join Voice'}
+          {joinedElsewhere && !isJoined ? 'In voice on another device' : joinState === 'joining' ? 'Joining…' : joinState === 'leaving' ? 'Leaving…' : isJoined ? 'Disconnect' : 'Join Voice'}
         </button>
         {isJoined && screenshare?.screenshareSupported && (
           <button

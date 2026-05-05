@@ -38,7 +38,7 @@ export function useVoice(user) {
 
     const { prefsRef } = useAudioPreferences();
     const { audioConfig } = useLiveMediaConfig();
-    const { send } = useRealtime();
+    const { send, connectionId } = useRealtime();
 
     const userRef = useLatest(user);
     const joinStateRef = useLatest(joinState);
@@ -59,11 +59,17 @@ export function useVoice(user) {
         speakingUsers,
         resetSpeakingUsers,
         fetchParticipants,
+        joinedElsewhere,
+        setJoinedElsewhere,
     } = useVoiceParticipants({
         joinStateRef,
+        userId: user?.id ?? null,
+        connectionId,
         onParticipantLeft: disposePeer,
         onSignal: applySignal,
     });
+
+    const joinedElsewhereRef = useLatest(joinedElsewhere);
 
     // ── VAD lifecycle ───────────────────────────────────────────────
 
@@ -110,7 +116,8 @@ export function useVoice(user) {
         setIsMuted(false);
         setIsSpeaking(false);
         resetSpeakingUsers();
-    }, [resetSpeakingUsers]);
+        setJoinedElsewhere(false);
+    }, [resetSpeakingUsers, setJoinedElsewhere]);
 
     const cleanup = useCallback(() => {
         disposeLocalVoice();
@@ -134,6 +141,7 @@ export function useVoice(user) {
     const join = useCallback(async () => {
         const currentUser = userRef.current;
         if (!currentUser || joinStateRef.current !== 'idle') return;
+        if (joinedElsewhereRef.current) return;
 
         setJoinState('joining');
         let backendJoined = false;
@@ -159,7 +167,7 @@ export function useVoice(user) {
             const response = await authedFetch(`${API_BASE}/voice/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
+                body: JSON.stringify({ connection_id: connectionId }),
             });
             if (!response.ok) throw new Error('Join failed');
             backendJoined = true;
@@ -188,7 +196,7 @@ export function useVoice(user) {
             }
             setJoinState('idle');
         }
-    }, [cleanup, startVad, sendOffersToParticipants, prefsRef, audioConfig, userRef, joinStateRef, setParticipants]);
+    }, [cleanup, startVad, sendOffersToParticipants, prefsRef, audioConfig, userRef, joinStateRef, setParticipants, connectionId, joinedElsewhereRef]);
 
     const leave = useCallback(async () => {
         const currentUser = userRef.current;
@@ -235,5 +243,6 @@ export function useVoice(user) {
         toggleMute,
         setVolume,
         fetchParticipants,
+        joinedElsewhere,
     };
 }
