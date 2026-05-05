@@ -119,10 +119,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
         if voice_room.is_joined(user_id) and _is_voice_owner(user_id, connection_id):
             voice_room.leave(user_id)
-            await ws_manager.broadcast({
-                "type": "voice_participant_left",
-                "data": {"user_id": user_id, "connection_id": connection_id},
-            })
+            await ws_manager.broadcast(
+                {
+                    "type": "voice_participant_left",
+                    "data": {"user_id": user_id, "connection_id": connection_id},
+                },
+                exclude_connection=(user_id, connection_id),
+            )
 
         is_last = ws_manager.disconnect(user_id, connection_id)
         if is_last:
