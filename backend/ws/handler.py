@@ -37,6 +37,8 @@ async def websocket_endpoint(websocket: WebSocket):
         return
 
     connection_id = await ws_manager.connect(user_id, websocket)
+    if connection_id is None:
+        return
 
     user_obj = await repo.get_user_by_id(user_id)
     user_data = user_obj.to_public_dict() if user_obj else {"id": user_id}
@@ -120,12 +122,13 @@ async def websocket_endpoint(websocket: WebSocket):
         if voice_room.is_joined(user_id) and _is_voice_owner(user_id, connection_id):
             voice_room.leave(user_id)
             await ws_manager.broadcast(
-                {
-                    "type": "voice_participant_left",
-                    "data": {"user_id": user_id, "connection_id": connection_id},
-                },
-                exclude_connection=(user_id, connection_id),
+                {"type": "voice_participant_left", "data": {"user_id": user_id}},
+                exclude_user=user_id,
             )
+            await ws_manager.send_to(user_id, {
+                "type": "voice_participant_left",
+                "data": {"user_id": user_id, "connection_id": connection_id},
+            })
 
         is_last = ws_manager.disconnect(user_id, connection_id)
         if is_last:

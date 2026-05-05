@@ -45,7 +45,12 @@ async def join_voice(body: dict) -> ConnexionResponse:
         return ConnexionResponse(status_code=400, body={"error": "Unknown user"})
 
     connection_id: str | None = body.get("connection_id")
-    if connection_id:
+    if connection_id is not None:
+        if not isinstance(connection_id, str) or not connection_id:
+            return ConnexionResponse(
+                status_code=400,
+                body={"error": "connection_id must be a non-empty string"},
+            )
         if not ws_manager.is_connection_active(user_id, connection_id):
             logger.warning(
                 "Voice join rejected: user=%s provided inactive connection_id=%s",
@@ -71,7 +76,11 @@ async def join_voice(body: dict) -> ConnexionResponse:
 
     voice_room.join(user_id, connection_id)
 
-    await ws_manager.broadcast({
+    await ws_manager.broadcast(
+        {"type": "voice_participant_joined", "data": {"user_id": user_id}},
+        exclude_user=user_id,
+    )
+    await ws_manager.send_to(user_id, {
         "type": "voice_participant_joined",
         "data": {"user_id": user_id, "connection_id": connection_id},
     })
@@ -99,7 +108,11 @@ async def leave_voice(body: dict) -> ConnexionResponse:
             exclude_user=user_id,
         )
 
-    await ws_manager.broadcast({
+    await ws_manager.broadcast(
+        {"type": "voice_participant_left", "data": {"user_id": user_id}},
+        exclude_user=user_id,
+    )
+    await ws_manager.send_to(user_id, {
         "type": "voice_participant_left",
         "data": {"user_id": user_id, "connection_id": voice_connection_id},
     })

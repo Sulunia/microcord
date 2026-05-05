@@ -4,6 +4,8 @@ import secrets
 
 from starlette.websockets import WebSocket
 
+from constants import MAX_CONNECTIONS_PER_USER
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,11 +24,23 @@ class ConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[str, dict[str, WebSocket]] = {}
 
-    async def connect(self, user_id: str, websocket: WebSocket) -> str:
+    async def connect(self, user_id: str, websocket: WebSocket) -> str | None:
         """Accept a WebSocket and register it under the given user.
 
-        Returns a unique ``connection_id`` for this specific connection.
+        Returns a unique ``connection_id`` for this specific connection,
+        or ``None`` if the per-user connection limit has been exceeded
+        (the socket is closed with code 4029 in that case).
         """
+        user_conns = self._connections.get(user_id, {})
+        if len(user_conns) >= MAX_CONNECTIONS_PER_USER:
+            logger.warning(
+                "WS rejected: user=%s has %d connections (limit=%d)",
+                user_id,
+                len(user_conns),
+                MAX_CONNECTIONS_PER_USER,
+            )
+            await websocket.close(code=4029)
+            return None
         await websocket.accept()
         connection_id = secrets.token_urlsafe(16)
         if user_id not in self._connections:
