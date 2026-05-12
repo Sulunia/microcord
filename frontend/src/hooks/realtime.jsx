@@ -1,6 +1,6 @@
 import { createContext } from 'preact';
 import { useState, useEffect, useCallback, useRef, useContext } from 'preact/hooks';
-import { API_BASE, WS_URL } from '../constants.js';
+import { API_BASE, WS_RECONNECT_DELAY_MS, WS_URL } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useLatest } from './use-latest.js';
 
@@ -32,7 +32,8 @@ export function RealtimeProvider({ user, children }) {
    * @param {{ type: string, data: unknown }} message
    */
   const dispatch = useCallback((message) => {
-    if (message.type === 'presence_init' && message.data?.connection_id) {
+    const isPresenceInit = message.type === 'presence_init';
+    if (isPresenceInit && message.data?.connection_id) {
       setConnectionId(message.data.connection_id);
     }
     const handlers = subscribersRef.current.get(message.type);
@@ -50,7 +51,7 @@ export function RealtimeProvider({ user, children }) {
     try {
       const response = await authedFetch(`${API_BASE}/auth/ws-ticket`, { method: 'POST' });
       if (!response.ok) {
-        reconnectTimerRef.current = setTimeout(connectSocket, 2000);
+        reconnectTimerRef.current = setTimeout(connectSocket, WS_RECONNECT_DELAY_MS);
         return;
       }
       const { ticket } = await response.json();
@@ -65,12 +66,12 @@ export function RealtimeProvider({ user, children }) {
       socket.onclose = () => {
         setConnected(false);
         setConnectionId(null);
-        reconnectTimerRef.current = setTimeout(connectSocket, 2000);
+        reconnectTimerRef.current = setTimeout(connectSocket, WS_RECONNECT_DELAY_MS);
       };
 
       socketRef.current = socket;
     } catch {
-      reconnectTimerRef.current = setTimeout(connectSocket, 2000);
+      reconnectTimerRef.current = setTimeout(connectSocket, WS_RECONNECT_DELAY_MS);
     }
   }, [dispatch]);
 

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'preact/hooks';
-import { API_BASE, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from '../constants.js';
+import { API_BASE, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE, VOICE_STATE, NOTIFICATION_VOLUME, VOICE_EXIT_VOLUME } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { playNotification } from './audio-notifications.js';
@@ -36,21 +36,20 @@ export function useVoiceParticipants({ joinStateRef, userId, connectionId, onPar
     useEffect(() => {
         const unsubs = [
             subscribe('voice_participant_joined', (data) => {
-                if (joinStateRef.current === 'joined') {
-                    playNotification(SOUND_ENTER_VOICE, 0.7);
+                if (joinStateRef.current === VOICE_STATE.JOINED) {
+                    playNotification(SOUND_ENTER_VOICE, NOTIFICATION_VOLUME);
                 }
-                if (
-                    data?.user_id === userId &&
-                    data?.connection_id != null &&
-                    data.connection_id !== connectionId
-                ) {
+                const isSameUser = data?.user_id === userId;
+                const isDifferentConnection = data?.connection_id != null && data.connection_id !== connectionId;
+                const isOtherConnectionJoining = isSameUser && isDifferentConnection;
+                if (isOtherConnectionJoining) {
                     setJoinedElsewhere(true);
                 }
                 fetchParticipants();
             }),
             subscribe('voice_participant_left', (data) => {
-                if (joinStateRef.current === 'joined') {
-                    playNotification(SOUND_EXIT_VOICE, 0.55);
+                if (joinStateRef.current === VOICE_STATE.JOINED) {
+                    playNotification(SOUND_EXIT_VOICE, VOICE_EXIT_VOLUME);
                 }
                 if (data?.user_id === userId) {
                     setJoinedElsewhere(false);
@@ -59,7 +58,7 @@ export function useVoiceParticipants({ joinStateRef, userId, connectionId, onPar
                 fetchParticipants();
             }),
             subscribe('voice_signal', (data) => {
-                if (joinStateRef.current === 'joined') {
+                if (joinStateRef.current === VOICE_STATE.JOINED) {
                     onSignal(data.from, data.signal);
                 }
             }),

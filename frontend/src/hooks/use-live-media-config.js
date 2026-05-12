@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
 
-const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-const DEFAULT_AUDIO_CONFIG = {
+const FALLBACK_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+const FALLBACK_AUDIO_CONFIG = {
     echo_cancellation: true,
     noise_suppression: true,
     auto_gain_control: true,
@@ -23,8 +23,8 @@ const DEFAULT_AUDIO_CONFIG = {
  */
 export function useLiveMediaConfig() {
     const [ready, setReady] = useState(false);
-    const iceRef = useRef(DEFAULT_ICE_SERVERS);
-    const audioRef = useRef(DEFAULT_AUDIO_CONFIG);
+    const iceRef = useRef(FALLBACK_ICE_SERVERS);
+    const audioRef = useRef(FALLBACK_AUDIO_CONFIG);
     const screenshareRef = useRef(LIVE_MEDIA_CONFIG.screenshare);
 
     useEffect(() => {

@@ -1,14 +1,7 @@
 import { useEffect, useState, useRef } from 'preact/hooks';
 import styles from './sidebar.module.css';
-import { TICK_SOUNDS, APP_VERSION } from '../../constants.js';
+import { TICK_SOUNDS, APP_VERSION, MAX_AVATAR_BYTES, AVATAR_ACCEPT, MAX_DISPLAY_NAME_LENGTH, VAD_RISING_DEBOUNCE_MS, VAD_FALLING_DEBOUNCE_MS, NOTIFICATION_VOLUME } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
-import { useTheme } from '../../hooks/use-theme.js';
-import { useAudioPreferences } from '../../hooks/use-audio-preferences.js';
-import { startVadMonitor } from '../../hooks/vad-monitor.js';
-import { playNotification } from '../../hooks/audio-notifications.js';
-
-const AVATAR_MAX_BYTES = 1 * 1024 * 1024;
-const AVATAR_ACCEPT = 'image/jpeg,image/png,image/avif';
 
 export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, onUploadAvatar, onLogout }) {
   const [displayName, setDisplayName] = useState('');
@@ -49,8 +42,8 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
         onSpeakingChange(speaking) {
           setMicDetected(speaking);
         },
-        risingDebounceMs: 22,
-        fallingDebounceMs: 170,
+        risingDebounceMs: VAD_RISING_DEBOUNCE_MS,
+        fallingDebounceMs: VAD_FALLING_DEBOUNCE_MS,
       });
     };
 
@@ -84,7 +77,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
     if (!file) return;
     setAvatarError(null);
 
-    if (file.size > AVATAR_MAX_BYTES) {
+    if (file.size > MAX_AVATAR_BYTES) {
       setAlertMsg('Avatar file is too large (max 1 MB).');
       return;
     }
@@ -187,7 +180,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
               <input
                 id="profile-name"
                 value={displayName}
-                maxLength={40}
+                maxLength={MAX_DISPLAY_NAME_LENGTH}
                 onInput={(e) => setDisplayName(e.target.value)}
                 placeholder="Your display name"
                 required
@@ -253,7 +246,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                       checked={selectedTick === t.id}
                         onChange={() => {
                           setSelectedTick(t.id);
-                          playNotification(t.url, 0.7);
+                          playNotification(t.url, NOTIFICATION_VOLUME);
                         }}
                     />
                     <label for={`tick-${t.id}`}>{t.label}</label>

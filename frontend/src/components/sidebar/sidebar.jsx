@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'preact/hooks';
-import { UI_CONFIG } from '../../constants.js';
+import { UI_CONFIG, VOICE_STATE } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
 
@@ -64,6 +64,18 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
   const sharerName = sharingParticipant?.name;
   const someoneElseSharing = Boolean(sharerUserId) && sharerUserId !== user?.id;
   const currentlyViewing = screenshare?.isViewing;
+
+  const isVoiceTransitioning = joinState === VOICE_STATE.JOINING || joinState === VOICE_STATE.LEAVING;
+  const isBlockedByOtherDevice = joinedElsewhere && !isJoined;
+  const voiceBtnLabel = isBlockedByOtherDevice
+    ? 'In voice on another device'
+    : joinState === VOICE_STATE.JOINING
+      ? 'Joining…'
+      : joinState === VOICE_STATE.LEAVING
+        ? 'Leaving…'
+        : isJoined
+          ? 'Disconnect'
+          : 'Join Voice';
 
   return (
     <aside class={styles.sidebar} style={style}>
@@ -134,9 +146,9 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
         <button
           class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
           onClick={isJoined ? leave : join}
-          disabled={joinState === 'joining' || joinState === 'leaving' || (joinedElsewhere && !isJoined)}
+          disabled={isVoiceTransitioning || isBlockedByOtherDevice}
         >
-          {joinedElsewhere && !isJoined ? 'In voice on another device' : joinState === 'joining' ? 'Joining…' : joinState === 'leaving' ? 'Leaving…' : isJoined ? 'Disconnect' : 'Join Voice'}
+          {voiceBtnLabel}
         </button>
         {isJoined && screenshare?.screenshareSupported && (
           <button

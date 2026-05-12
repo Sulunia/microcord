@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
-import { API_BASE } from '../constants.js';
+import { API_BASE, VOICE_STATE, NOTIFICATION_VOLUME } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { useAudioPreferences } from './use-audio-preferences.js';
@@ -26,7 +26,7 @@ import { useVoiceParticipants } from './use-voice-participants.js';
  * @param {{ id: string } | null} user
  */
 export function useVoice(user) {
-    const [joinState, setJoinState] = useState('idle');
+    const [joinState, setJoinState] = useState(VOICE_STATE.IDLE);
     const [isMuted, setIsMuted] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -34,7 +34,7 @@ export function useVoice(user) {
     const vadMonitorRef = useRef(null);
     const vadSpeakingRef = useRef(false);
 
-    const isJoined = joinState === 'joined';
+    const isJoined = joinState === VOICE_STATE.JOINED;
 
     const { prefsRef } = useAudioPreferences();
     const { audioConfig } = useLiveMediaConfig();
@@ -130,7 +130,8 @@ export function useVoice(user) {
     useEffect(() => cleanup, [cleanup]);
 
     useEffect(() => {
-        if (!user?.id || !isJoined) return;
+        const isActiveInVoice = user?.id && isJoined;
+        if (!isActiveInVoice) return;
         const onBeforeUnload = () => { cleanup(); };
         window.addEventListener('beforeunload', onBeforeUnload);
         return () => window.removeEventListener('beforeunload', onBeforeUnload);
@@ -140,10 +141,11 @@ export function useVoice(user) {
 
     const join = useCallback(async () => {
         const currentUser = userRef.current;
-        if (!currentUser || joinStateRef.current !== 'idle') return;
+        const isNotIdle = joinStateRef.current !== VOICE_STATE.IDLE;
+        if (!currentUser || isNotIdle) return;
         if (joinedElsewhereRef.current) return;
 
-        setJoinState('joining');
+        setJoinState(VOICE_STATE.JOINING);
         let backendJoined = false;
 
         try {
@@ -174,7 +176,7 @@ export function useVoice(user) {
 
             const { participants: participantList } = await response.json();
             setParticipants(participantList);
-            setJoinState('joined');
+            setJoinState(VOICE_STATE.JOINED);
 
             if (noInputDevice) {
                 setIsMuted(true);
@@ -194,7 +196,7 @@ export function useVoice(user) {
                     body: JSON.stringify({}),
                 }).catch(() => {});
             }
-            setJoinState('idle');
+            setJoinState(VOICE_STATE.IDLE);
         }
     }, [cleanup, startVad, sendOffersToParticipants, prefsRef, audioConfig, userRef, joinStateRef, setParticipants, connectionId, joinedElsewhereRef]);
 
@@ -202,7 +204,7 @@ export function useVoice(user) {
         const currentUser = userRef.current;
         if (!currentUser) return;
 
-        setJoinState('leaving');
+        setJoinState(VOICE_STATE.LEAVING);
         cleanup();
 
         await authedFetch(`${API_BASE}/voice/leave`, {
@@ -211,7 +213,7 @@ export function useVoice(user) {
             body: JSON.stringify({}),
         }).catch(() => {});
 
-        setJoinState('idle');
+        setJoinState(VOICE_STATE.IDLE);
         await fetchParticipants();
     }, [fetchParticipants, cleanup, userRef]);
 

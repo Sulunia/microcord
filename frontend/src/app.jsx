@@ -10,14 +10,10 @@ import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
 import { useIsMobile } from './hooks/use-is-mobile.js';
 import { RealtimeProvider } from './hooks/realtime.jsx';
-import { UI_CONFIG } from './constants.js';
+import { UI_CONFIG, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from './constants.js';
 import styles from './app.module.css';
 
 const isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-
-const MIN_SIDEBAR = 180;
-const MAX_SIDEBAR = 480;
-const DEFAULT_SIDEBAR = 240;
 
 function HelpModal({ onClose }) {
   return (
@@ -55,7 +51,7 @@ function HelpModal({ onClose }) {
 }
 
 function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, uploadAvatar }) {
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [showHelp, setShowHelp] = useState(false);
   const [showMembers, setShowMembers] = useState(true);
   const dragging = useRef(false);
@@ -68,7 +64,7 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
 
     const onMouseMove = (e) => {
       if (!dragging.current) return;
-      const newWidth = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, e.clientX));
+      const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, e.clientX));
       setSidebarWidth(newWidth);
     };
 

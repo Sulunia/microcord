@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
-import { API_BASE, CHAT_PAGE_SIZE } from '../constants.js';
+import { API_BASE, CHAT_PAGE_SIZE, NOTIFICATION_VOLUME } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { useLatest } from './use-latest.js';
 import { playNotification, tickUrl } from './audio-notifications.js';
 
 function playTick(tickSound) {
-  playNotification(tickUrl(tickSound), 0.7);
+  playNotification(tickUrl(tickSound), NOTIFICATION_VOLUME);
 }
 
 export function useChat(user) {
@@ -78,7 +78,8 @@ export function useChat(user) {
         });
         const authorId = author?.id;
         const currentId = userRef.current?.id;
-        if (authorId && authorId !== currentId) {
+        const isOtherUserMessage = authorId && authorId !== currentId;
+        if (isOtherUserMessage) {
           playTick(author?.tick_sound);
         }
       }),

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-
-const MOBILE_BREAKPOINT = 768;
+import { MOBILE_BREAKPOINT } from '../constants.js';
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = useState(

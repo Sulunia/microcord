@@ -2,12 +2,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'preact/hooks'
 import { Message } from './message.jsx';
 import { MessageInput } from './message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
+import { SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, DEFAULT_VIDEO_RATIO, MIN_VIDEO_RATIO, MAX_VIDEO_RATIO } from '../../constants.js';
 import styles from './chat-panel.module.css';
-const SCROLL_TOP_THRESHOLD = 40;
-const DEFAULT_VIDEO_RATIO = 0.5;
-const MIN_VIDEO_RATIO = 0.15;
-const MAX_VIDEO_RATIO = 0.85;
-const GROUP_THRESHOLD_MS = 60_000;
 
 function getAuthorId(msg) {
   return msg.author?.id ?? msg.author_id ?? null;
@@ -92,7 +88,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
     if (!el || !hasMore) return;
 
     requestAnimationFrame(() => {
-      if (el.scrollHeight <= el.clientHeight + 8) {
+      if (el.scrollHeight <= el.clientHeight + EMPTY_CONTENT_HEIGHT) {
         loadOlder();
       }
     });
@@ -115,7 +111,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
     const el = listRef.current;
     if (!el) return;
 
-    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_TOLERANCE;
 
     if (el.scrollTop < SCROLL_TOP_THRESHOLD && hasMore) {
       scrollAnchorRef.current = el.scrollHeight;
