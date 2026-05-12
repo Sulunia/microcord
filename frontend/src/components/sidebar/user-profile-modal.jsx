@@ -2,6 +2,10 @@ import { useEffect, useState, useRef } from 'preact/hooks';
 import styles from './sidebar.module.css';
 import { TICK_SOUNDS, APP_VERSION, MAX_AVATAR_BYTES, AVATAR_ACCEPT, MAX_DISPLAY_NAME_LENGTH, VAD_RISING_DEBOUNCE_MS, VAD_FALLING_DEBOUNCE_MS, NOTIFICATION_VOLUME } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
+import { useTheme } from '../../hooks/use-theme.js';
+import { useAudioPreferences } from '../../hooks/use-audio-preferences.js';
+import { startVadMonitor } from '../../hooks/vad-monitor.js';
+import { playNotification } from '../../hooks/audio-notifications.js';
 
 export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, onUploadAvatar, onLogout }) {
   const [displayName, setDisplayName] = useState('');
