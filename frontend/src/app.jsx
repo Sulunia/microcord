@@ -13,7 +13,8 @@ import { RealtimeProvider } from './hooks/realtime.jsx';
 import { UI_CONFIG, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from './constants.js';
 import styles from './app.module.css';
 
-const isPwa = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const standaloneQuery = window.matchMedia('(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)');
+const isPwa = standaloneQuery.matches || window.navigator.standalone === true;
 
 function HelpModal({ onClose }) {
   return (
