@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: Microcord API
-  version: "0.8.4"
+  version: "0.8.6"
   description: Minimal Discord-like self-hosted chat and voice API.
 
 servers:
@@ -399,7 +399,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
+              $ref: "#/components/schemas/VoiceJoinRequest"
       responses:
         "200":
           description: Joined
@@ -408,9 +408,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/VoiceJoinResponse"
         "400":
-          description: Unknown user
+          description: Unknown user or invalid connection_id
         "401":
           description: Not authenticated
+        "409":
+          description: Already joined voice on another device/connection
 
   /voice/leave:
     post:
@@ -598,6 +600,16 @@ components:
       properties:
         url:
           type: string
+
+    VoiceJoinRequest:
+      type: object
+      properties:
+        connection_id:
+          type: string
+          description: >
+            The WebSocket connection_id of the session joining voice.
+            Optional — if omitted the join still succeeds but the server
+            cannot enforce the single-voice-session-per-user constraint.
 
     VoiceJoinResponse:
       type: object

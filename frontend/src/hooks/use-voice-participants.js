@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'preact/hooks';
-import { API_BASE, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from '../constants.js';
+import { API_BASE, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE, VOICE_STATE, NOTIFICATION_VOLUME, VOICE_EXIT_VOLUME } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { playNotification } from './audio-notifications.js';
@@ -10,13 +10,16 @@ import { playNotification } from './audio-notifications.js';
  *
  * @param {object} options
  * @param {import('preact/hooks').MutableRef<string>} options.joinStateRef — latest joinState
+ * @param {string | null} options.userId — current user ID for detecting joinedElsewhere
+ * @param {string | null} options.connectionId — current connection ID for detecting joinedElsewhere
  * @param {(userId: string) => void} options.onParticipantLeft — dispose peer for leaving user
  * @param {(fromId: string, signal: object) => void} options.onSignal — apply incoming voice signal
  * @param {() => void} [options.onRefreshScreenshare] — notify screenshare hook
  */
-export function useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal }) {
+export function useVoiceParticipants({ joinStateRef, userId, connectionId, onParticipantLeft, onSignal }) {
     const [participants, setParticipants] = useState([]);
     const [speakingUsers, setSpeakingUsers] = useState(new Map());
+    const [joinedElsewhere, setJoinedElsewhere] = useState(false);
 
     const { subscribe } = useRealtime();
 
@@ -32,21 +35,30 @@ export function useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal
 
     useEffect(() => {
         const unsubs = [
-            subscribe('voice_participant_joined', () => {
-                if (joinStateRef.current === 'joined') {
-                    playNotification(SOUND_ENTER_VOICE, 0.7);
+            subscribe('voice_participant_joined', (data) => {
+                if (joinStateRef.current === VOICE_STATE.JOINED) {
+                    playNotification(SOUND_ENTER_VOICE, NOTIFICATION_VOLUME);
+                }
+                const isSameUser = data?.user_id === userId;
+                const isDifferentConnection = data?.connection_id != null && data.connection_id !== connectionId;
+                const isOtherConnectionJoining = isSameUser && isDifferentConnection;
+                if (isOtherConnectionJoining) {
+                    setJoinedElsewhere(true);
                 }
                 fetchParticipants();
             }),
             subscribe('voice_participant_left', (data) => {
-                if (joinStateRef.current === 'joined') {
-                    playNotification(SOUND_EXIT_VOICE, 0.55);
+                if (joinStateRef.current === VOICE_STATE.JOINED) {
+                    playNotification(SOUND_EXIT_VOICE, VOICE_EXIT_VOLUME);
+                }
+                if (data?.user_id === userId) {
+                    setJoinedElsewhere(false);
                 }
                 onParticipantLeft(data.user_id);
                 fetchParticipants();
             }),
             subscribe('voice_signal', (data) => {
-                if (joinStateRef.current === 'joined') {
+                if (joinStateRef.current === VOICE_STATE.JOINED) {
                     onSignal(data.from, data.signal);
                 }
             }),
@@ -72,7 +84,7 @@ export function useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal
             subscribe('user_updated', () => fetchParticipants()),
         ];
         return () => unsubs.forEach((unsub) => unsub());
-    }, [subscribe, fetchParticipants, onParticipantLeft, onSignal, joinStateRef]);
+    }, [subscribe, fetchParticipants, onParticipantLeft, onSignal, joinStateRef, userId, connectionId]);
 
     /** Reset speaking state (called on voice leave). */
     const resetSpeakingUsers = useCallback(() => {
@@ -85,5 +97,7 @@ export function useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal
         speakingUsers,
         resetSpeakingUsers,
         fetchParticipants,
+        joinedElsewhere,
+        setJoinedElsewhere,
     };
 }

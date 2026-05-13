@@ -3,11 +3,8 @@ import { Message } from '../chat/message.jsx';
 import { MessageInput } from '../chat/message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
 import { UserProfileModal } from '../sidebar/user-profile-modal.jsx';
-import { UI_CONFIG } from '../../constants.js';
+import { UI_CONFIG, VOICE_STATE, SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS } from '../../constants.js';
 import styles from './mobile-layout.module.css';
-
-const GROUP_THRESHOLD_MS = 60_000;
-const SCROLL_TOP_THRESHOLD = 40;
 
 function getAuthorId(msg) {
   return msg.author?.id ?? msg.author_id ?? null;
@@ -19,7 +16,7 @@ function getTimestamp(msg) {
 }
 
 function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute } = voice;
+  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -36,6 +33,18 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
   const sharerName = sharingParticipant?.name;
   const someoneElseSharing = Boolean(sharerUserId) && sharerUserId !== user?.id;
   const currentlyViewing = screenshare?.isViewing;
+
+  const isVoiceTransitioning = joinState === VOICE_STATE.JOINING || joinState === VOICE_STATE.LEAVING;
+  const isBlockedByOtherDevice = joinedElsewhere && !isJoined;
+  const voiceBtnLabel = isBlockedByOtherDevice
+    ? 'In voice on another device'
+    : joinState === VOICE_STATE.JOINING
+      ? 'Joining…'
+      : joinState === VOICE_STATE.LEAVING
+        ? 'Leaving…'
+        : isJoined
+          ? 'Disconnect'
+          : 'Join Voice';
 
   return (
     <div class={styles.voiceView}>
@@ -101,9 +110,9 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
         <button
           class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
           onClick={isJoined ? leave : join}
-          disabled={joinState === 'joining' || joinState === 'leaving'}
+          disabled={isVoiceTransitioning || isBlockedByOtherDevice}
         >
-          {joinState === 'joining' ? 'Joining…' : joinState === 'leaving' ? 'Leaving…' : isJoined ? 'Disconnect' : 'Join Voice'}
+          {voiceBtnLabel}
         </button>
         {isJoined && screenshare?.screenshareSupported && (
           <button
@@ -257,7 +266,7 @@ function MobileChatTab({ chat, screenshare, currentUser }) {
     const el = listRef.current;
     if (!el || !hasMore) return;
     requestAnimationFrame(() => {
-      if (el.scrollHeight <= el.clientHeight + 8) {
+      if (el.scrollHeight <= el.clientHeight + EMPTY_CONTENT_HEIGHT) {
         loadOlder();
       }
     });
@@ -279,7 +288,7 @@ function MobileChatTab({ chat, screenshare, currentUser }) {
   const onScroll = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
-    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_TOLERANCE;
     if (el.scrollTop < SCROLL_TOP_THRESHOLD && hasMore) {
       scrollAnchorRef.current = el.scrollHeight;
       loadOlder();

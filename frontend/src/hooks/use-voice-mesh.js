@@ -83,7 +83,8 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
             const sender = peerConnection.addTrack(track, stream);
             if (track.kind === 'audio') {
                 audioSendersRef.current.set(targetId, sender);
-                if (!(vadSpeakingRef.current && !isMutedRef.current)) {
+                const isActivelySpeaking = vadSpeakingRef.current && !isMutedRef.current;
+                if (!isActivelySpeaking) {
                     sender.replaceTrack(null).catch(() => {});
                 }
             }

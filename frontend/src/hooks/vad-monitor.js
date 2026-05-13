@@ -1,3 +1,5 @@
+import { VAD_RISING_DEBOUNCE_MS, VAD_FALLING_DEBOUNCE_MS } from '../constants.js';
+
 /**
  * Convert a 1–100 sensitivity slider value to an RMS threshold.
  * Higher sensitivity → lower threshold → easier to trigger speaking.
@@ -36,8 +38,8 @@ export function startVadMonitor(stream, options) {
         prefsRef,
         getThreshold,
         onSpeakingChange,
-        risingDebounceMs = 22,
-        fallingDebounceMs = 180,
+        risingDebounceMs = VAD_RISING_DEBOUNCE_MS,
+        fallingDebounceMs = VAD_FALLING_DEBOUNCE_MS,
     } = options;
 
     let speaking = false;

@@ -1,4 +1,4 @@
-import { TICK_SOUNDS, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE } from '../constants.js';
+import { TICK_SOUNDS, SOUND_ENTER_VOICE, SOUND_EXIT_VOICE, NOTIFICATION_VOLUME, VOICE_EXIT_VOLUME } from '../constants.js';
 
 const cache = new Map();
 
@@ -11,9 +11,9 @@ function preload(url, volume) {
     return audio;
 }
 
-preload(SOUND_ENTER_VOICE, 0.7);
-preload(SOUND_EXIT_VOICE, 0.55);
-TICK_SOUNDS.forEach((t) => preload(t.url, 0.7));
+preload(SOUND_ENTER_VOICE, NOTIFICATION_VOLUME);
+preload(SOUND_EXIT_VOICE, VOICE_EXIT_VOLUME);
+TICK_SOUNDS.forEach((t) => preload(t.url, NOTIFICATION_VOLUME));
 
 /**
  * Play a cached notification sound.
@@ -21,7 +21,7 @@ TICK_SOUNDS.forEach((t) => preload(t.url, 0.7));
  * @param {string} url  — e.g. `'/sounds/EnterVoice.wav'`
  * @param {number} [volume=0.7] — 0…1
  */
-export function playNotification(url, volume = 0.7) {
+export function playNotification(url, volume = NOTIFICATION_VOLUME) {
     const audio = preload(url, volume);
     audio.volume = volume;
     audio.currentTime = 0;

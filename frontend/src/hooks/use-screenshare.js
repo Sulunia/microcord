@@ -85,7 +85,8 @@ export function useScreenshare(user, voiceParticipants, isVoiceJoined) {
 
     const startSharing = useCallback(async () => {
         const currentUser = userRef.current;
-        if (!currentUser || !isVoiceJoined || isSharing) return;
+        const isNotReadyToShare = !currentUser || !isVoiceJoined || isSharing;
+        if (isNotReadyToShare) return;
         if (sharerUserId) return;
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia(getDisplayConstraints(screenshareConfig));

@@ -1,6 +1,6 @@
 import { createContext } from 'preact';
 import { useState, useEffect, useCallback, useRef, useContext } from 'preact/hooks';
-import { API_BASE, WS_URL } from '../constants.js';
+import { API_BASE, WS_RECONNECT_DELAY_MS, WS_URL } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useLatest } from './use-latest.js';
 
@@ -21,6 +21,7 @@ const RealtimeContext = createContext(null);
  */
 export function RealtimeProvider({ user, children }) {
   const [connected, setConnected] = useState(false);
+  const [connectionId, setConnectionId] = useState(/** @type {string | null} */ (null));
   const socketRef = useRef(/** @type {WebSocket | null} */ (null));
   const reconnectTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
   const subscribersRef = useRef(new Map());
@@ -31,6 +32,10 @@ export function RealtimeProvider({ user, children }) {
    * @param {{ type: string, data: unknown }} message
    */
   const dispatch = useCallback((message) => {
+    const isPresenceInit = message.type === 'presence_init';
+    if (isPresenceInit && message.data?.connection_id) {
+      setConnectionId(message.data.connection_id);
+    }
     const handlers = subscribersRef.current.get(message.type);
     if (handlers) {
       for (const handler of handlers) {
@@ -46,7 +51,7 @@ export function RealtimeProvider({ user, children }) {
     try {
       const response = await authedFetch(`${API_BASE}/auth/ws-ticket`, { method: 'POST' });
       if (!response.ok) {
-        reconnectTimerRef.current = setTimeout(connectSocket, 2000);
+        reconnectTimerRef.current = setTimeout(connectSocket, WS_RECONNECT_DELAY_MS);
         return;
       }
       const { ticket } = await response.json();
@@ -60,12 +65,13 @@ export function RealtimeProvider({ user, children }) {
 
       socket.onclose = () => {
         setConnected(false);
-        reconnectTimerRef.current = setTimeout(connectSocket, 2000);
+        setConnectionId(null);
+        reconnectTimerRef.current = setTimeout(connectSocket, WS_RECONNECT_DELAY_MS);
       };
 
       socketRef.current = socket;
     } catch {
-      reconnectTimerRef.current = setTimeout(connectSocket, 2000);
+      reconnectTimerRef.current = setTimeout(connectSocket, WS_RECONNECT_DELAY_MS);
     }
   }, [dispatch]);
 
@@ -118,7 +124,7 @@ export function RealtimeProvider({ user, children }) {
   }, []);
 
   return (
-    <RealtimeContext.Provider value={{ send, subscribe, connected }}>
+    <RealtimeContext.Provider value={{ send, subscribe, connected, connectionId }}>
       {children}
     </RealtimeContext.Provider>
   );
@@ -128,7 +134,7 @@ export function RealtimeProvider({ user, children }) {
  * Hook that returns the realtime context value.
  * Must be called inside a `<RealtimeProvider>`.
  *
- * @returns {{ send: (type: string, data: unknown) => void, subscribe: (type: string, handler: (data: unknown) => void) => () => void, connected: boolean }}
+ * @returns {{ send: (type: string, data: unknown) => void, subscribe: (type: string, handler: (data: unknown) => void) => () => void, connected: boolean, connectionId: string | null }}
  */
 export function useRealtime() {
   const context = useContext(RealtimeContext);

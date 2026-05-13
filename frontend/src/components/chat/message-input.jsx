@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import styles from './message-input.module.css';
+import { MAX_MESSAGE_LENGTH, MAX_IMAGE_BYTES } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
-
-const MAX_MESSAGE_LENGTH = 4000;
-const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 
 export function MessageInput({ onSend }) {
   const [text, setText] = useState('');
@@ -98,7 +96,8 @@ export function MessageInput({ onSend }) {
   };
 
   const submit = async () => {
-    if (sending || (!text.trim() && !imageFile)) return;
+    const hasNoContent = !text.trim() && !imageFile;
+    if (sending || hasNoContent) return;
     if (text.length > MAX_MESSAGE_LENGTH) {
       setAlertMsg(`Chat message is too large (max ${MAX_MESSAGE_LENGTH.toLocaleString()} characters).`);
       return;

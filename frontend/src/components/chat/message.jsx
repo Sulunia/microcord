@@ -2,13 +2,13 @@ import { memo, useState, useMemo } from 'preact/compat';
 import { createPortal } from 'preact/compat';
 import snarkdown from 'snarkdown';
 import DOMPurify from 'dompurify';
-import { TIMESTAMP_RECENT_THRESHOLD_MS, TIMESTAMP_TODAY_THRESHOLD_MS } from '../../constants.js';
+import { TIMESTAMP_RECENT_THRESHOLD_MS, TIMESTAMP_TODAY_THRESHOLD_MS, HOUR_MS } from '../../constants.js';
 import styles from './message.module.css';
 
 function formatTimestamp(ts) {
   const diff = Date.now() - ts;
   if (diff < TIMESTAMP_RECENT_THRESHOLD_MS) return 'just now';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < HOUR_MS) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < TIMESTAMP_TODAY_THRESHOLD_MS) {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }

@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { UI_CONFIG } from '../constants.js';
+import { UI_CONFIG, MAX_DISPLAY_NAME_LENGTH, MIN_PASSWORD_LENGTH, MAX_PASSPHRASE_LENGTH } from '../constants.js';
 import styles from './login-screen.module.css';
 
 export function LoginScreen({ onRegister, onLogin, error }) {
@@ -11,7 +11,8 @@ export function LoginScreen({ onRegister, onLogin, error }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !password || loading) return;
+    const isFormIncomplete = !name.trim() || !password;
+    if (isFormIncomplete || loading) return;
 
     setLoading(true);
     if (isLoginMode) {
@@ -22,9 +23,12 @@ export function LoginScreen({ onRegister, onLogin, error }) {
     setLoading(false);
   };
 
+  const hasName = Boolean(name.trim());
+  const hasPassword = password.length >= MIN_PASSWORD_LENGTH;
+  const hasPassphrase = Boolean(passphrase.trim());
   const canSubmit = isLoginMode
-    ? name.trim() && password.length >= 6
-    : name.trim() && password.length >= 6 && passphrase.trim();
+    ? hasName && hasPassword
+    : hasName && hasPassword && hasPassphrase;
 
   return (
     <div class={styles.container}>
@@ -44,7 +48,7 @@ export function LoginScreen({ onRegister, onLogin, error }) {
                 type="text"
                 value={name}
                 onInput={(e) => setName(e.target.value)}
-                maxLength={40}
+                maxLength={MAX_DISPLAY_NAME_LENGTH}
                 autoFocus
               />
             </div>
@@ -66,7 +70,7 @@ export function LoginScreen({ onRegister, onLogin, error }) {
                   value={passphrase}
                   onInput={(e) => setPassphrase(e.target.value)}
                   placeholder="Ask the server admin"
-                  maxLength={32}
+                  maxLength={MAX_PASSPHRASE_LENGTH}
                 />
               </div>
             )}
