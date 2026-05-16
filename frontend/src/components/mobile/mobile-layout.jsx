@@ -142,58 +142,76 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
   );
 }
 
-function MobileUsersTab({ usersMap, onlineUserIds }) {
+function MobileUserItem({ user, isOnline, isSelf, canAdmin, onAdminToggle }) {
+  const name = user?.display_name || 'Unknown';
+  const initial = name.charAt(0).toUpperCase();
+  const hasAvatar = Boolean(user?.avatar_url);
+  const badge = user?.is_owner ? '\u{1F451}' : user?.is_admin ? '\u{2B50}' : null;
+
+  const handleAdminAction = () => {
+    onAdminToggle(user.id, !user.is_admin);
+  };
+
+  const showAdminBtn = canAdmin && !user?.is_owner && !isSelf;
+
+  return (
+    <div class={`${styles.userItem} ${!isOnline ? styles.userOffline : ''}`}>
+      <span class={styles.userAvatar}>
+        {hasAvatar ? (
+          <img src={user.avatar_url} alt={name} class={styles.userAvatarImg} />
+        ) : (
+          <span>{initial}</span>
+        )}
+        <span class={`${styles.userStatusDot} ${isOnline ? styles.userStatusOnline : styles.userStatusOffline}`} />
+      </span>
+      <span class={styles.userName}>{name}</span>
+      {badge && <span class={styles.userBadge}>{badge}</span>}
+      {showAdminBtn && (
+        <button class={styles.userAdminBtn} onClick={handleAdminAction}>
+          {user?.is_admin ? '✕' : '⭐'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) {
   const allUsers = Object.values(usersMap);
   const onlineSet = onlineUserIds || new Set();
-  const online = allUsers.filter((u) => onlineSet.has(u.id));
-  const offline = allUsers.filter((u) => !onlineSet.has(u.id));
+  const online = allUsers.filter((user) => onlineSet.has(user.id));
+  const offline = allUsers.filter((user) => !onlineSet.has(user.id));
+  const canAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
 
   return (
     <div class={`${styles.usersView} has-scrollbar`}>
       {online.length > 0 && (
         <div>
           <div class={styles.userGroupHeader}>Online — {online.length}</div>
-          {online.map((u) => {
-            const name = u?.display_name || 'Unknown';
-            const initial = name.charAt(0).toUpperCase();
-            const hasAvatar = Boolean(u?.avatar_url);
-            return (
-              <div class={styles.userItem}>
-                <span class={styles.userAvatar}>
-                  {hasAvatar ? (
-                    <img src={u.avatar_url} alt={name} class={styles.userAvatarImg} />
-                  ) : (
-                    <span>{initial}</span>
-                  )}
-                  <span class={`${styles.userStatusDot} ${styles.userStatusOnline}`} />
-                </span>
-                <span class={styles.userName}>{name}</span>
-              </div>
-            );
-          })}
+          {online.map((user) => (
+            <MobileUserItem
+              key={user.id}
+              user={user}
+              isOnline={true}
+              isSelf={user.id === currentUser?.id}
+              canAdmin={canAdmin}
+              onAdminToggle={setUserAdmin}
+            />
+          ))}
         </div>
       )}
       {offline.length > 0 && (
         <div>
           <div class={styles.userGroupHeader}>Offline — {offline.length}</div>
-          {offline.map((u) => {
-            const name = u?.display_name || 'Unknown';
-            const initial = name.charAt(0).toUpperCase();
-            const hasAvatar = Boolean(u?.avatar_url);
-            return (
-              <div class={`${styles.userItem} ${styles.userOffline}`}>
-                <span class={styles.userAvatar}>
-                  {hasAvatar ? (
-                    <img src={u.avatar_url} alt={name} class={styles.userAvatarImg} />
-                  ) : (
-                    <span>{initial}</span>
-                  )}
-                  <span class={`${styles.userStatusDot} ${styles.userStatusOffline}`} />
-                </span>
-                <span class={styles.userName}>{name}</span>
-              </div>
-            );
-          })}
+          {offline.map((user) => (
+            <MobileUserItem
+              key={user.id}
+              user={user}
+              isOnline={false}
+              isSelf={user.id === currentUser?.id}
+              canAdmin={canAdmin}
+              onAdminToggle={setUserAdmin}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -361,7 +379,7 @@ export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, 
           />
         )}
         {activeTab === 'users' && (
-          <MobileUsersTab usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} />
+          <MobileUsersTab usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} currentUser={user} setUserAdmin={chat.setUserAdmin} />
         )}
       </div>
     </div>

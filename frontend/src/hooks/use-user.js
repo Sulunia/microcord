@@ -202,9 +202,9 @@ export function useUser() {
 
     const payload = {};
     if (typeof nextUser?.display_name === 'string') {
-      const dn = nextUser.display_name.trim();
-      if (!dn) return false;
-      payload.display_name = dn;
+      const displayName = nextUser.display_name.trim();
+      if (!displayName) return false;
+      payload.display_name = displayName;
     }
 
     if (typeof nextUser?.tick_sound === 'number') {
@@ -244,5 +244,5 @@ export function useUser() {
     return true;
   }, [user]);
 
-  return { user, ready, error, register, login, logout, updateProfile, uploadAvatar };
+  return { user, setUser, ready, error, register, login, logout, updateProfile, uploadAvatar };
 }

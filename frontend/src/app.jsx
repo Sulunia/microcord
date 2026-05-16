@@ -113,7 +113,7 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
               onToggleMembers={() => setShowMembers((v) => !v)}
             />
             {showMembers && (
-              <MembersSidebar usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} />
+              <MembersSidebar usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} currentUser={user} setUserAdmin={chat.setUserAdmin} />
             )}
           </div>
         </div>
@@ -123,8 +123,8 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
   );
 }
 
-function AuthenticatedApp({ user, logout, updateProfile, uploadAvatar }) {
-  const chat = useChat(user);
+function AuthenticatedApp({ user, setUser, logout, updateProfile, uploadAvatar }) {
+  const chat = useChat(user, setUser);
   const voice = useVoice(user);
   const screenshare = useScreenshare(user, voice.participants, voice.isJoined);
   const isMobile = useIsMobile();
@@ -157,7 +157,7 @@ function AuthenticatedApp({ user, logout, updateProfile, uploadAvatar }) {
 }
 
 export function App() {
-  const { user, ready, error, register, login, logout, updateProfile, uploadAvatar } = useUser();
+  const { user, setUser, ready, error, register, login, logout, updateProfile, uploadAvatar } = useUser();
 
   if (!user) {
     if (!ready) return null;
@@ -168,6 +168,7 @@ export function App() {
     <RealtimeProvider user={user}>
       <AuthenticatedApp
         user={user}
+        setUser={setUser}
         logout={logout}
         updateProfile={updateProfile}
         uploadAvatar={uploadAvatar}

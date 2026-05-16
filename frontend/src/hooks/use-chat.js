@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
-import { API_BASE, CHAT_PAGE_SIZE, NOTIFICATION_VOLUME } from '../constants.js';
+import { API_BASE, CHAT_PAGE_SIZE, NOTIFICATION_VOLUME, USER_STORAGE_KEY } from '../constants.js';
 import { authedFetch } from './use-user.js';
 import { useRealtime } from './realtime.jsx';
 import { useLatest } from './use-latest.js';
@@ -9,7 +9,7 @@ function playTick(tickSound) {
   playNotification(tickUrl(tickSound), NOTIFICATION_VOLUME);
 }
 
-export function useChat(user) {
+export function useChat(user, setUser) {
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [usersMap, setUsersMap] = useState({});
@@ -28,7 +28,7 @@ export function useChat(user) {
       if (!res.ok) return;
       const list = await res.json();
       const map = {};
-      for (const u of list) map[u.id] = u;
+      for (const user of list) map[user.id] = user;
       setUsersMap(map);
     } catch {}
   }, []);
@@ -93,6 +93,11 @@ export function useChat(user) {
         const updatedUser = data?.user;
         if (updatedUser?.id) {
           setUsersMap((prev) => ({ ...prev, [updatedUser.id]: updatedUser }));
+          if (updatedUser.id === user?.id && setUser) {
+            const merged = { ...user, ...updatedUser };
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(merged));
+            setUser(merged);
+          }
         }
       }),
       subscribe('presence_init', (data) => {
@@ -185,10 +190,22 @@ export function useChat(user) {
     }
   }, []);
 
-  const hydratedMessages = messages.map((m) => ({
-    ...m,
-    author: m.author || usersMap[m.author_id] || null,
+  const setUserAdmin = useCallback(async (targetUserId, isAdmin) => {
+    const res = await authedFetch(`${API_BASE}/users/${targetUserId}/admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_admin: isAdmin }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setUsersMap((prev) => ({ ...prev, [data.id]: data }));
+    }
+  }, []);
+
+  const hydratedMessages = messages.map((message) => ({
+    ...message,
+    author: message.author || usersMap[message.author_id] || null,
   }));
 
-  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, usersMap, onlineUserIds };
+  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, usersMap, onlineUserIds, setUserAdmin };
 }

@@ -17,6 +17,7 @@ from constants import (
     AUTH_PROVIDER, JWT_SECRET, JWT_ALGORITHM, JWT_ISSUER, JWT_AUDIENCE,
     ACCESS_TOKEN_EXPIRY_MINUTES, REFRESH_TOKEN_EXPIRY_DAYS,
     JWT_SECRET_MIN_LENGTH, JWT_SECRET_FILE,
+    ROLE_OWNER, ROLE_ADMIN, ROLE_USER,
 )
 from database.models import TICK_SOUNDS
 from database.repository import repo
@@ -67,7 +68,15 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
-def create_access_token(user_id: str, user_name: str) -> str:
+def _user_role(user) -> str:
+    if getattr(user, "is_owner", False):
+        return ROLE_OWNER
+    if getattr(user, "is_admin", False):
+        return ROLE_ADMIN
+    return ROLE_USER
+
+
+def create_access_token(user_id: str, user_name: str, *, role: str = ROLE_USER) -> str:
     secret = _resolve_secret()
     now = datetime.now(timezone.utc)
     payload = {
@@ -79,12 +88,13 @@ def create_access_token(user_id: str, user_name: str) -> str:
         "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRY_MINUTES),
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
+        "role": role,
     }
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def create_token(user_id: str, user_name: str) -> str:
-    return create_access_token(user_id, user_name)
+def create_token(user_id: str, user_name: str, *, role: str = ROLE_USER) -> str:
+    return create_access_token(user_id, user_name, role=role)
 
 
 async def create_refresh_token(user_id: str) -> str:
@@ -110,7 +120,7 @@ async def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
     if not user:
         return None
 
-    access_token = create_access_token(user.id, user.name)
+    access_token = create_access_token(user.id, user.name, role=_user_role(user))
     return access_token, new_raw
 
 
@@ -229,8 +239,12 @@ class AuthMiddleware:
             )
             return await response(scope, receive, send)
 
+        guard.register_jti(payload["sub"], payload["jti"], payload["exp"])
+
+        role = payload.get("role", ROLE_USER)
         scope.setdefault("state", {})["current_user"] = {
             "id": payload["sub"], "name": payload["name"],
+            "role": role,
         }
 
         return await self.app(scope, receive, send)

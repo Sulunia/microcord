@@ -250,6 +250,37 @@ paths:
         "404":
           description: User not found
 
+  /users/{user_id}/admin:
+    post:
+      operationId: api.users.set_user_admin
+      summary: Promote or demote a user's admin status (admin/owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAdminRequest"
+      responses:
+        "200":
+          description: Admin status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "403":
+          description: Not authorized or cannot modify owner
+        "404":
+          description: User not found
+
   /messages:
     get:
       operationId: api.chat.list_messages
@@ -522,6 +553,7 @@ components:
 
     UpdateUserRequest:
       type: object
+      additionalProperties: false
       properties:
         display_name:
           type: string
@@ -531,6 +563,15 @@ components:
           type: integer
           minimum: 1
           maximum: 4
+
+    SetAdminRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - is_admin
+      properties:
+        is_admin:
+          type: boolean
 
     User:
       type: object
@@ -549,6 +590,10 @@ components:
           type: integer
           minimum: 1
           maximum: 4
+        is_admin:
+          type: boolean
+        is_owner:
+          type: boolean
         created_at:
           type: string
           format: date-time

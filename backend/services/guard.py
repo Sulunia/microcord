@@ -39,6 +39,7 @@ class Guard:
     def __init__(self):
         self._buckets: dict[str, list] = {}
         self._revoked: dict[str, float] = {}
+        self._user_jtis: dict[str, dict[str, float]] = {}
         self._check_count: int = 0
 
         passphrase = os.environ.get("REGISTRATION_PASSPHRASE", "")
@@ -47,9 +48,22 @@ class Guard:
     def log_passphrase(self) -> None:
         logger.info(f"Registration passphrase: {self.passphrase}")
 
+    def register_jti(self, user_id: str, jti: str, exp: float) -> None:
+        jtis = self._user_jtis.setdefault(user_id, {})
+        jtis[jti] = exp
+
     def revoke_jti(self, jti: str, expires_at: float) -> None:
         self._revoked[jti] = expires_at
         logger.debug(f"Revoked JTI {jti[:8]}… until {expires_at:.0f}")
+
+    def revoke_user_tokens(self, user_id: str) -> None:
+        jtis = self._user_jtis.pop(user_id, {})
+        now = time.time()
+        for jti, exp in jtis.items():
+            if exp > now:
+                self._revoked[jti] = exp
+        if jtis:
+            logger.info(f"Revoked {len(jtis)} access token(s) for user {user_id[:8]}…")
 
     def is_jti_revoked(self, jti: str) -> bool:
         exp = self._revoked.get(jti)
@@ -127,8 +141,12 @@ class Guard:
                  if b[2] <= now and now - b[1] > 600]
         for k in stale:
             del self._buckets[k]
-        if expired or stale:
-            logger.debug(f"Pruned {len(expired)} revoked JTIs, {len(stale)} stale rate-limit buckets")
+        stale_users = [uid for uid, jtis in self._user_jtis.items()
+                       if not any(exp > now for exp in jtis.values())]
+        for uid in stale_users:
+            del self._user_jtis[uid]
+        if expired or stale or stale_users:
+            logger.debug(f"Pruned {len(expired)} revoked JTIs, {len(stale)} stale rate-limit buckets, {len(stale_users)} stale user-JTI maps")
 
 
 guard = Guard()

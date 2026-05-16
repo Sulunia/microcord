@@ -5,7 +5,8 @@ from connexion.lifecycle import ConnexionResponse
 from constants import DISPLAY_NAME_MAX_LENGTH
 from database.models import TICK_SOUNDS
 from database.repository import repo
-from services.utils.request_context import current_user_id
+from services.guard import guard
+from services.utils.request_context import current_user_id, current_user_is_admin, current_user_is_owner
 from ws.manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -61,3 +62,34 @@ async def update_user(user_id: str, body: dict) -> ConnexionResponse:
 
     logger.info(f"User updated: {result['display_name']} ({result['id']})")
     return ConnexionResponse(status_code=200, body=result)
+
+
+async def set_user_admin(user_id: str, body: dict) -> ConnexionResponse:
+    if not current_user_is_admin() and not current_user_is_owner():
+        return ConnexionResponse(status_code=403, body={"error": "Admin access required"})
+
+    is_admin = body.get("is_admin")
+    if is_admin is None or not isinstance(is_admin, bool):
+        return ConnexionResponse(status_code=400, body={"error": "is_admin (boolean) required"})
+
+    target = await repo.get_user_by_id(user_id)
+    if not target:
+        return ConnexionResponse(status_code=404, body={"error": "User not found"})
+
+    if target.is_owner:
+        return ConnexionResponse(status_code=403, body={"error": "Cannot modify server owner's admin status"})
+
+    user = await repo.set_user_admin(user_id, is_admin)
+    if user is None:
+        return ConnexionResponse(status_code=404, body={"error": "User not found"})
+
+    guard.revoke_user_tokens(user_id)
+
+    public_user = user.to_public_dict()
+    await ws_manager.broadcast({
+        "type": "user_updated",
+        "data": {"user_id": user_id, "user": public_user},
+    })
+
+    logger.info(f"Admin status changed: {public_user['display_name']} ({public_user['id']}) -> is_admin={is_admin}")
+    return ConnexionResponse(status_code=200, body=public_user)
