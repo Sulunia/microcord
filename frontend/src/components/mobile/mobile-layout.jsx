@@ -142,23 +142,23 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
   );
 }
 
-function MobileUserItem({ u, isOnline, isSelf, canAdmin, onAdminToggle }) {
-  const name = u?.display_name || 'Unknown';
+function MobileUserItem({ user, isOnline, isSelf, canAdmin, onAdminToggle }) {
+  const name = user?.display_name || 'Unknown';
   const initial = name.charAt(0).toUpperCase();
-  const hasAvatar = Boolean(u?.avatar_url);
-  const badge = u?.is_owner ? '\u{1F451}' : u?.is_admin ? '\u{2B50}' : null;
+  const hasAvatar = Boolean(user?.avatar_url);
+  const badge = user?.is_owner ? '\u{1F451}' : user?.is_admin ? '\u{2B50}' : null;
 
   const handleAdminAction = () => {
-    onAdminToggle(u.id, !u.is_admin);
+    onAdminToggle(user.id, !user.is_admin);
   };
 
-  const showAdminBtn = canAdmin && !u?.is_owner && !isSelf;
+  const showAdminBtn = canAdmin && !user?.is_owner && !isSelf;
 
   return (
     <div class={`${styles.userItem} ${!isOnline ? styles.userOffline : ''}`}>
       <span class={styles.userAvatar}>
         {hasAvatar ? (
-          <img src={u.avatar_url} alt={name} class={styles.userAvatarImg} />
+          <img src={user.avatar_url} alt={name} class={styles.userAvatarImg} />
         ) : (
           <span>{initial}</span>
         )}
@@ -168,7 +168,7 @@ function MobileUserItem({ u, isOnline, isSelf, canAdmin, onAdminToggle }) {
       {badge && <span class={styles.userBadge}>{badge}</span>}
       {showAdminBtn && (
         <button class={styles.userAdminBtn} onClick={handleAdminAction}>
-          {u?.is_admin ? '✕' : '⭐'}
+          {user?.is_admin ? '✕' : '⭐'}
         </button>
       )}
     </div>
@@ -178,8 +178,8 @@ function MobileUserItem({ u, isOnline, isSelf, canAdmin, onAdminToggle }) {
 function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) {
   const allUsers = Object.values(usersMap);
   const onlineSet = onlineUserIds || new Set();
-  const online = allUsers.filter((u) => onlineSet.has(u.id));
-  const offline = allUsers.filter((u) => !onlineSet.has(u.id));
+  const online = allUsers.filter((user) => onlineSet.has(user.id));
+  const offline = allUsers.filter((user) => !onlineSet.has(user.id));
   const canAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
 
   return (
@@ -187,12 +187,12 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
       {online.length > 0 && (
         <div>
           <div class={styles.userGroupHeader}>Online — {online.length}</div>
-          {online.map((u) => (
+          {online.map((user) => (
             <MobileUserItem
-              key={u.id}
-              u={u}
+              key={user.id}
+              user={user}
               isOnline={true}
-              isSelf={u.id === currentUser?.id}
+              isSelf={user.id === currentUser?.id}
               canAdmin={canAdmin}
               onAdminToggle={setUserAdmin}
             />
@@ -202,12 +202,12 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
       {offline.length > 0 && (
         <div>
           <div class={styles.userGroupHeader}>Offline — {offline.length}</div>
-          {offline.map((u) => (
+          {offline.map((user) => (
             <MobileUserItem
-              key={u.id}
-              u={u}
+              key={user.id}
+              user={user}
               isOnline={false}
-              isSelf={u.id === currentUser?.id}
+              isSelf={user.id === currentUser?.id}
               canAdmin={canAdmin}
               onAdminToggle={setUserAdmin}
             />

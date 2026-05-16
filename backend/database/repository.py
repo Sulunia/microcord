@@ -193,6 +193,9 @@ class BackendRepository:
             user = result.scalar_one_or_none()
             if not user:
                 return None
+            if user.is_owner:
+                logger.warning("Refusing to modify admin status of owner %s", user_id)
+                return user
             user.is_admin = is_admin
             await session.flush()
             await session.refresh(user)

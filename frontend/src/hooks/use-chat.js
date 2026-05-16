@@ -28,7 +28,7 @@ export function useChat(user, setUser) {
       if (!res.ok) return;
       const list = await res.json();
       const map = {};
-      for (const u of list) map[u.id] = u;
+      for (const user of list) map[user.id] = user;
       setUsersMap(map);
     } catch {}
   }, []);
@@ -202,9 +202,9 @@ export function useChat(user, setUser) {
     }
   }, []);
 
-  const hydratedMessages = messages.map((m) => ({
-    ...m,
-    author: m.author || usersMap[m.author_id] || null,
+  const hydratedMessages = messages.map((message) => ({
+    ...message,
+    author: message.author || usersMap[message.author_id] || null,
   }));
 
   return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, usersMap, onlineUserIds, setUserAdmin };

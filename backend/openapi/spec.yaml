@@ -553,6 +553,7 @@ components:
 
     UpdateUserRequest:
       type: object
+      additionalProperties: false
       properties:
         display_name:
           type: string
@@ -565,6 +566,7 @@ components:
 
     SetAdminRequest:
       type: object
+      additionalProperties: false
       required:
         - is_admin
       properties:

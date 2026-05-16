@@ -85,11 +85,11 @@ async def set_user_admin(user_id: str, body: dict) -> ConnexionResponse:
 
     guard.revoke_user_tokens(user_id)
 
-    result = user.to_dict()
+    public_user = user.to_public_dict()
     await ws_manager.broadcast({
         "type": "user_updated",
-        "data": {"user_id": user_id, "user": user.to_public_dict()},
+        "data": {"user_id": user_id, "user": public_user},
     })
 
-    logger.info(f"Admin status changed: {result['display_name']} ({result['id']}) -> is_admin={is_admin}")
-    return ConnexionResponse(status_code=200, body=result)
+    logger.info(f"Admin status changed: {public_user['display_name']} ({public_user['id']}) -> is_admin={is_admin}")
+    return ConnexionResponse(status_code=200, body=public_user)

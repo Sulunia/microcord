@@ -50,8 +50,8 @@ export function MembersSidebar({ usersMap, onlineUserIds, currentUser, setUserAd
   const allUsers = Object.values(usersMap);
   const onlineSet = onlineUserIds || new Set();
 
-  const online = allUsers.filter((u) => onlineSet.has(u.id));
-  const offline = allUsers.filter((u) => !onlineSet.has(u.id));
+  const online = allUsers.filter((user) => onlineSet.has(user.id));
+  const offline = allUsers.filter((user) => !onlineSet.has(user.id));
 
   const canAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
 
@@ -61,12 +61,12 @@ export function MembersSidebar({ usersMap, onlineUserIds, currentUser, setUserAd
         {online.length > 0 && (
           <div class={styles.group}>
             <div class={styles.groupHeader}>Online — {online.length}</div>
-            {online.map((u) => (
+            {online.map((user) => (
               <MemberItem
-                key={u.id}
-                user={u}
+                key={user.id}
+                user={user}
                 isOnline={true}
-                isSelf={u.id === currentUser?.id}
+                isSelf={user.id === currentUser?.id}
                 canAdmin={canAdmin}
                 onAdminToggle={setUserAdmin}
               />
@@ -76,12 +76,12 @@ export function MembersSidebar({ usersMap, onlineUserIds, currentUser, setUserAd
         {offline.length > 0 && (
           <div class={styles.group}>
             <div class={styles.groupHeader}>Offline — {offline.length}</div>
-            {offline.map((u) => (
+            {offline.map((user) => (
               <MemberItem
-                key={u.id}
-                user={u}
+                key={user.id}
+                user={user}
                 isOnline={false}
-                isSelf={u.id === currentUser?.id}
+                isSelf={user.id === currentUser?.id}
                 canAdmin={canAdmin}
                 onAdminToggle={setUserAdmin}
               />
