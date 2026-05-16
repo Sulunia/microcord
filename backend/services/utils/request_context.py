@@ -3,6 +3,7 @@ import logging
 from connexion import request as connexion_request
 
 from services.guard import get_client_ip
+from constants import ROLE_OWNER, ROLE_ADMIN
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +23,12 @@ def current_user_id() -> str | None:
 
 def current_user_is_admin() -> bool:
     user = current_user()
-    return user.get("role") in ("admin", "owner") if user else False
+    return user.get("role") in (ROLE_ADMIN, ROLE_OWNER) if user else False
 
 
 def current_user_is_owner() -> bool:
     user = current_user()
-    return user.get("role") == "owner" if user else False
+    return user.get("role") == ROLE_OWNER if user else False
 
 
 def authorization_bearer() -> str | None:

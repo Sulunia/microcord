@@ -17,6 +17,7 @@ from constants import (
     AUTH_PROVIDER, JWT_SECRET, JWT_ALGORITHM, JWT_ISSUER, JWT_AUDIENCE,
     ACCESS_TOKEN_EXPIRY_MINUTES, REFRESH_TOKEN_EXPIRY_DAYS,
     JWT_SECRET_MIN_LENGTH, JWT_SECRET_FILE,
+    ROLE_OWNER, ROLE_ADMIN, ROLE_USER,
 )
 from database.models import TICK_SOUNDS
 from database.repository import repo
@@ -69,13 +70,13 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def _user_role(user) -> str:
     if getattr(user, "is_owner", False):
-        return "owner"
+        return ROLE_OWNER
     if getattr(user, "is_admin", False):
-        return "admin"
-    return "user"
+        return ROLE_ADMIN
+    return ROLE_USER
 
 
-def create_access_token(user_id: str, user_name: str, *, role: str = "user") -> str:
+def create_access_token(user_id: str, user_name: str, *, role: str = ROLE_USER) -> str:
     secret = _resolve_secret()
     now = datetime.now(timezone.utc)
     payload = {
@@ -92,7 +93,7 @@ def create_access_token(user_id: str, user_name: str, *, role: str = "user") -> 
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def create_token(user_id: str, user_name: str, *, role: str = "user") -> str:
+def create_token(user_id: str, user_name: str, *, role: str = ROLE_USER) -> str:
     return create_access_token(user_id, user_name, role=role)
 
 
@@ -238,7 +239,7 @@ class AuthMiddleware:
             )
             return await response(scope, receive, send)
 
-        role = payload.get("role", "user")
+        role = payload.get("role", ROLE_USER)
         scope.setdefault("state", {})["current_user"] = {
             "id": payload["sub"], "name": payload["name"],
             "role": role,
