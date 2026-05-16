@@ -239,6 +239,8 @@ class AuthMiddleware:
             )
             return await response(scope, receive, send)
 
+        guard.register_jti(payload["sub"], payload["jti"], payload["exp"])
+
         role = payload.get("role", ROLE_USER)
         scope.setdefault("state", {})["current_user"] = {
             "id": payload["sub"], "name": payload["name"],

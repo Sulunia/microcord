@@ -5,6 +5,7 @@ from connexion.lifecycle import ConnexionResponse
 from constants import DISPLAY_NAME_MAX_LENGTH
 from database.models import TICK_SOUNDS
 from database.repository import repo
+from services.guard import guard
 from services.utils.request_context import current_user_id, current_user_is_admin, current_user_is_owner
 from ws.manager import ws_manager
 
@@ -81,6 +82,8 @@ async def set_user_admin(user_id: str, body: dict) -> ConnexionResponse:
     user = await repo.set_user_admin(user_id, is_admin)
     if user is None:
         return ConnexionResponse(status_code=404, body={"error": "User not found"})
+
+    guard.revoke_user_tokens(user_id)
 
     result = user.to_dict()
     await ws_manager.broadcast({

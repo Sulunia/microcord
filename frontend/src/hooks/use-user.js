@@ -244,5 +244,5 @@ export function useUser() {
     return true;
   }, [user]);
 
-  return { user, ready, error, register, login, logout, updateProfile, uploadAvatar };
+  return { user, setUser, ready, error, register, login, logout, updateProfile, uploadAvatar };
 }

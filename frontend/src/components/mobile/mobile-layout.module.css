@@ -417,3 +417,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.userBadge {
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.userAdminBtn {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.userAdminBtn:hover {
+  background: var(--mc-msg-hover);
+}
