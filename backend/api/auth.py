@@ -7,6 +7,7 @@ from database.repository import repo
 from services.auth import (
     auth_provider, create_access_token, create_refresh_token,
     rotate_refresh_token, revoke_all_refresh_tokens, decode_token,
+    _user_role,
 )
 from services.guard import guard
 from services.utils.request_context import client_ip, authorization_bearer, current_user_id
@@ -47,7 +48,7 @@ async def register(body: dict) -> ConnexionResponse:
     if user is None:
         return ConnexionResponse(status_code=409, body={"error": "Username already taken"})
 
-    access_token = create_access_token(user.id, user.name, is_admin=user.is_admin, is_owner=user.is_owner)
+    access_token = create_access_token(user.id, user.name, role=_user_role(user))
     refresh_token = await create_refresh_token(user.id)
     logger.info(f"Auth register: {user.name} ({user.id})")
     return ConnexionResponse(status_code=201, body={
@@ -73,7 +74,7 @@ async def login(body: dict) -> ConnexionResponse:
     if user is None:
         return ConnexionResponse(status_code=401, body={"error": "Invalid credentials"})
 
-    access_token = create_access_token(user.id, user.name, is_admin=user.is_admin, is_owner=user.is_owner)
+    access_token = create_access_token(user.id, user.name, role=_user_role(user))
     refresh_token = await create_refresh_token(user.id)
     logger.info(f"Auth login: {user.name} ({user.id})")
     return ConnexionResponse(status_code=200, body={

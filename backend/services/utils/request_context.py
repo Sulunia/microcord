@@ -22,12 +22,12 @@ def current_user_id() -> str | None:
 
 def current_user_is_admin() -> bool:
     user = current_user()
-    return user.get("is_admin", False) if user else False
+    return user.get("role") in ("admin", "owner") if user else False
 
 
 def current_user_is_owner() -> bool:
     user = current_user()
-    return user.get("is_owner", False) if user else False
+    return user.get("role") == "owner" if user else False
 
 
 def authorization_bearer() -> str | None:

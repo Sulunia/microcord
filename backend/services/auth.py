@@ -67,7 +67,15 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
-def create_access_token(user_id: str, user_name: str, *, is_admin: bool = False, is_owner: bool = False) -> str:
+def _user_role(user) -> str:
+    if getattr(user, "is_owner", False):
+        return "owner"
+    if getattr(user, "is_admin", False):
+        return "admin"
+    return "user"
+
+
+def create_access_token(user_id: str, user_name: str, *, role: str = "user") -> str:
     secret = _resolve_secret()
     now = datetime.now(timezone.utc)
     payload = {
@@ -79,14 +87,13 @@ def create_access_token(user_id: str, user_name: str, *, is_admin: bool = False,
         "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRY_MINUTES),
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
-        "is_admin": is_admin,
-        "is_owner": is_owner,
+        "role": role,
     }
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def create_token(user_id: str, user_name: str, *, is_admin: bool = False, is_owner: bool = False) -> str:
-    return create_access_token(user_id, user_name, is_admin=is_admin, is_owner=is_owner)
+def create_token(user_id: str, user_name: str, *, role: str = "user") -> str:
+    return create_access_token(user_id, user_name, role=role)
 
 
 async def create_refresh_token(user_id: str) -> str:
@@ -112,7 +119,7 @@ async def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
     if not user:
         return None
 
-    access_token = create_access_token(user.id, user.name, is_admin=user.is_admin, is_owner=user.is_owner)
+    access_token = create_access_token(user.id, user.name, role=_user_role(user))
     return access_token, new_raw
 
 
@@ -231,10 +238,10 @@ class AuthMiddleware:
             )
             return await response(scope, receive, send)
 
+        role = payload.get("role", "user")
         scope.setdefault("state", {})["current_user"] = {
             "id": payload["sub"], "name": payload["name"],
-            "is_admin": payload.get("is_admin", False),
-            "is_owner": payload.get("is_owner", False),
+            "role": role,
         }
 
         return await self.app(scope, receive, send)
