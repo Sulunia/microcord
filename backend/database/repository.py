@@ -40,6 +40,7 @@ class BackendRepository:
             await conn.run_sync(Base.metadata.create_all)
             await _migrate_columns(conn)
             await _migrate_indexes(conn)
+        await self.migrate_owner()
 
     def start_writer(self):
         if self._queue is None:
@@ -125,7 +126,12 @@ class BackendRepository:
             existing = await session.execute(select(User).where(User.name == name))
             if existing.scalar_one_or_none():
                 return None
-            user = User(name=name, password_hash=password_hash, tick_sound=tick_sound)
+            count_result = await session.execute(select(User).limit(1))
+            is_first = count_result.scalar_one_or_none() is None
+            user = User(
+                name=name, password_hash=password_hash, tick_sound=tick_sound,
+                is_admin=is_first, is_owner=is_first,
+            )
             session.add(user)
             await session.flush()
             await session.refresh(user)
@@ -165,6 +171,30 @@ class BackendRepository:
             await session.refresh(user)
             return user
 
+        return await self._enqueue_write(_write)
+
+    async def migrate_owner(self):
+        async def _write(session):
+            result = await session.execute(select(User).where(User.is_owner == True))
+            if result.scalar_one_or_none():
+                return
+            result = await session.execute(select(User).order_by(User.created_at).limit(1))
+            owner = result.scalar_one_or_none()
+            if owner:
+                owner.is_owner = True
+                owner.is_admin = True
+        await self._enqueue_write(_write)
+
+    async def set_user_admin(self, user_id: str, is_admin: bool) -> User | None:
+        async def _write(session):
+            result = await session.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            if not user:
+                return None
+            user.is_admin = is_admin
+            await session.flush()
+            await session.refresh(user)
+            return user
         return await self._enqueue_write(_write)
 
     async def create_message(

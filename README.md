@@ -18,6 +18,7 @@ Open **http://localhost:5173** — register an account and start chatting. The r
 - **Real-time** — instant message broadcast via WebSocket
 - **User profiles** — editable display name and avatar
 - **Dark mode** — light/dark theme toggle, persisted per-browser
+- **Admin roles** — server owner (first registered account, cannot be demoted) and admins (promoted by any admin/owner via user list); role badges shown in members sidebar
 - **Resizable sidebars/separators** — drag to resize
 
 ## Architecture

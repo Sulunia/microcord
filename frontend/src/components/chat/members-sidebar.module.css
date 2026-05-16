@@ -30,6 +30,7 @@
 }
 
 .member {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -96,4 +97,39 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.badge {
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.contextMenu {
+  position: absolute;
+  right: 4px;
+  top: 100%;
+  z-index: 100;
+  background: var(--mc-bg);
+  border: 1px solid var(--mc-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  padding: 2px 0;
+  min-width: 120px;
+}
+
+.contextMenuItem {
+  display: block;
+  width: 100%;
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  color: var(--mc-text);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.contextMenuItem:hover {
+  background: var(--mc-msg-hover);
 }

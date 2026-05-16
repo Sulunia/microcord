@@ -67,7 +67,7 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
-def create_access_token(user_id: str, user_name: str) -> str:
+def create_access_token(user_id: str, user_name: str, *, is_admin: bool = False, is_owner: bool = False) -> str:
     secret = _resolve_secret()
     now = datetime.now(timezone.utc)
     payload = {
@@ -79,12 +79,14 @@ def create_access_token(user_id: str, user_name: str) -> str:
         "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRY_MINUTES),
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
+        "is_admin": is_admin,
+        "is_owner": is_owner,
     }
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
-def create_token(user_id: str, user_name: str) -> str:
-    return create_access_token(user_id, user_name)
+def create_token(user_id: str, user_name: str, *, is_admin: bool = False, is_owner: bool = False) -> str:
+    return create_access_token(user_id, user_name, is_admin=is_admin, is_owner=is_owner)
 
 
 async def create_refresh_token(user_id: str) -> str:
@@ -110,7 +112,7 @@ async def rotate_refresh_token(raw_token: str) -> tuple[str, str] | None:
     if not user:
         return None
 
-    access_token = create_access_token(user.id, user.name)
+    access_token = create_access_token(user.id, user.name, is_admin=user.is_admin, is_owner=user.is_owner)
     return access_token, new_raw
 
 
@@ -231,6 +233,8 @@ class AuthMiddleware:
 
         scope.setdefault("state", {})["current_user"] = {
             "id": payload["sub"], "name": payload["name"],
+            "is_admin": payload.get("is_admin", False),
+            "is_owner": payload.get("is_owner", False),
         }
 
         return await self.app(scope, receive, send)

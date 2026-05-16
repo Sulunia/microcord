@@ -22,6 +22,7 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     tick_sound: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -38,6 +39,8 @@ class User(Base):
             "display_name": self.effective_name,
             "avatar_url": self.avatar_url,
             "tick_sound": self.tick_sound,
+            "is_admin": self.is_admin,
+            "is_owner": self.is_owner,
             "created_at": self.created_at.isoformat() + ("Z" if not self.created_at.tzinfo else ""),
         }
 
@@ -47,6 +50,8 @@ class User(Base):
             "display_name": self.effective_name,
             "avatar_url": self.avatar_url,
             "tick_sound": self.tick_sound,
+            "is_admin": self.is_admin,
+            "is_owner": self.is_owner,
         }
 
 

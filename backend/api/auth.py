@@ -47,7 +47,7 @@ async def register(body: dict) -> ConnexionResponse:
     if user is None:
         return ConnexionResponse(status_code=409, body={"error": "Username already taken"})
 
-    access_token = create_access_token(user.id, user.name)
+    access_token = create_access_token(user.id, user.name, is_admin=user.is_admin, is_owner=user.is_owner)
     refresh_token = await create_refresh_token(user.id)
     logger.info(f"Auth register: {user.name} ({user.id})")
     return ConnexionResponse(status_code=201, body={
@@ -73,7 +73,7 @@ async def login(body: dict) -> ConnexionResponse:
     if user is None:
         return ConnexionResponse(status_code=401, body={"error": "Invalid credentials"})
 
-    access_token = create_access_token(user.id, user.name)
+    access_token = create_access_token(user.id, user.name, is_admin=user.is_admin, is_owner=user.is_owner)
     refresh_token = await create_refresh_token(user.id)
     logger.info(f"Auth login: {user.name} ({user.id})")
     return ConnexionResponse(status_code=200, body={

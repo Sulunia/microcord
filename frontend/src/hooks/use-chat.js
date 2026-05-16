@@ -185,10 +185,22 @@ export function useChat(user) {
     }
   }, []);
 
+  const setUserAdmin = useCallback(async (targetUserId, isAdmin) => {
+    const res = await authedFetch(`${API_BASE}/users/${targetUserId}/admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_admin: isAdmin }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setUsersMap((prev) => ({ ...prev, [data.id]: data }));
+    }
+  }, []);
+
   const hydratedMessages = messages.map((m) => ({
     ...m,
     author: m.author || usersMap[m.author_id] || null,
   }));
 
-  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, usersMap, onlineUserIds };
+  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, usersMap, onlineUserIds, setUserAdmin };
 }

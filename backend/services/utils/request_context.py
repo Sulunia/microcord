@@ -20,6 +20,16 @@ def current_user_id() -> str | None:
     return user.get("id") if user else None
 
 
+def current_user_is_admin() -> bool:
+    user = current_user()
+    return user.get("is_admin", False) if user else False
+
+
+def current_user_is_owner() -> bool:
+    user = current_user()
+    return user.get("is_owner", False) if user else False
+
+
 def authorization_bearer() -> str | None:
     try:
         scope = connexion_request.scope

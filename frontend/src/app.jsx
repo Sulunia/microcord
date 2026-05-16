@@ -113,7 +113,7 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
               onToggleMembers={() => setShowMembers((v) => !v)}
             />
             {showMembers && (
-              <MembersSidebar usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} />
+              <MembersSidebar usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} currentUser={user} setUserAdmin={chat.setUserAdmin} />
             )}
           </div>
         </div>

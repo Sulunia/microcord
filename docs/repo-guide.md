@@ -55,14 +55,14 @@ microcord/
 │   │   ├── chat.py             # list_messages, send_message, delete_message
 │   │   ├── config.py           # get_branding (app name, voice channel name)
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
-│   │   ├── users.py            # list_users, get_user, update_user, get_online_users
+│   │   ├── users.py            # list_users, get_user, update_user, get_online_users, set_user_admin
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar (thin orchestration via services/utils/)
 │   ├── database/
 │   │   ├── models.py           # SQLAlchemy models (User, Message, RefreshToken)
-│   │   └── repository.py      # Async repository (single-writer queue for SQLite safety)
+│   │   └── repository.py      # Async repository (single-writer queue for SQLite safety; migrate_owner, set_user_admin)
 │   ├── services/
-│   │   ├── auth.py             # Access/refresh token creation, rotation, JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider
+│   │   ├── auth.py             # Access/refresh token creation, rotation, JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider; JWT includes is_admin/is_owner claims
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
 │   │   ├── guard.py            # Rate limiting (exponential backoff), token revocation, registration passphrase
 │   │   ├── media_manager.py    # Background ffmpeg worker: images→AVIF, videos/GIFs→AV1/MP4 (GIFs skip scaling); typed jobs (MessageMediaJob, AvatarJob)
@@ -97,7 +97,7 @@ microcord/
 │       │   ├── use-voice-mesh.js   # useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) — WebRTC mesh: peer connections, audio senders, remote audio elements, SDP munging, disposePeer/disposeAllPeers/setVolume
 │       │   ├── use-voice-participants.js # useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal }) — participant REST fetch, speakingUsers state, WS subscriptions for join/leave/mute/speaking/signal events
 │       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
-│       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs)
+│       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs), setUserAdmin
 │       │   ├── use-voice.js        # Thin orchestrator composing useVoiceMesh + useVoiceParticipants + VAD; join/leave state machine, mute toggle, cleanup ownership
 │       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
 │       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
@@ -112,7 +112,7 @@ microcord/
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
 │       │   │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split, header bar with channel name and members toggle
-│       │   │   ├── members-sidebar.jsx     # Toggleable right sidebar: all users grouped by online/offline status with presence dots
+│       │   │   ├── members-sidebar.jsx     # Toggleable right sidebar: all users grouped by online/offline status with presence dots; role badges (👑 owner, ⭐ admin); admin context menu for promote/demote
 │       │   │   ├── message.jsx             # Single message: markdown (snarkdown + DOMPurify), images
 │       │   │   ├── message-input.jsx       # Compose bar with upload
 │       │   │   └── *.module.css
@@ -147,6 +147,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | GET | `/api/users/online` | `api.users.get_online_users` | Get currently online user IDs (WebSocket-connected) |
 | GET | `/api/users/{id}` | `api.users.get_user` | Get user by ID |
 | PATCH | `/api/users/{id}` | `api.users.update_user` | Update own display_name (IDOR-protected) |
+| POST | `/api/users/{id}/admin` | `api.users.set_user_admin` | Promote/demote admin status (admin/owner only; cannot modify owner) |
 | GET | `/api/messages` | `api.chat.list_messages` | Paginated history (`?limit=&cursor=`) |
 | POST | `/api/messages` | `api.chat.send_message` | Send message (author from JWT, broadcasts via WS). Rate limited: 10/10s/user |
 | DELETE | `/api/messages/{id}` | `api.chat.delete_message` | Hard-delete own message (author from JWT, deletes associated file, broadcasts deletion via WS) |
@@ -178,7 +179,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `chat_message_deleted` | Server → Client | Message deleted; payload `{ id }` — clients remove from local list |
 | `voice_participant_joined` | Server → Client | User joined voice |
 | `voice_participant_left` | Server → Client | User left voice |
-| `user_updated` | Server → Client | User profile changed (display_name, avatar) |
+| `user_updated` | Server → Client | User profile changed (display_name, avatar, is_admin, is_owner) |
 | `screenshare_start` | Both | User started sharing; also sent on new connect if someone is sharing |
 | `screenshare_stop` | Both | User stopped sharing |
 | `screenshare_signal` | Both | WebRTC signaling relay (SDP offer/answer, ICE candidate) |
@@ -188,7 +189,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `voice_mute` | Both | User toggled mute state; payload `{ user_id, muted }` — server broadcasts to all clients |
 | `voice_speaking` | Both | Client-side VAD detected speaking state change; payload `{ user_id, speaking }` — server broadcasts to all clients (including sender) |
 | `presence_init` | Server → Client | Sent on WS connect; payload `{ user_ids }` — full list of currently online user IDs |
-| `presence_online` | Server → Client | User connected via WebSocket; payload `{ user_id, user }` — includes user object so new users appear in members list without re-fetch; broadcast to all other clients |
+| `presence_online` | Server → Client | User connected via WebSocket; payload `{ user_id, user }` — includes user object (with is_admin/is_owner) so new users appear in members list without re-fetch; broadcast to all other clients |
 | `presence_offline` | Server → Client | User disconnected from WebSocket; payload `{ user_id }` — broadcast to all clients |
 
 ---
@@ -244,6 +245,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `avatar_url` | String, nullable | Path under `/uploads/` |
 | `password_hash` | String | bcrypt hash |
 | `is_admin` | Boolean | Default `False` |
+| `is_owner` | Boolean | Default `False`; first registered user is auto-set to owner (cannot be demoted) |
 | `created_at` | DateTime | UTC, auto-set |
 
 ### Message (`backend/database/models.py`)
@@ -309,7 +311,7 @@ Starlette is provided transitively through Connexion.
 4. Backend validates credentials (bcrypt verify for login, bcrypt hash for register).
 5. Returns `{ user, access_token, refresh_token }` — access token is a short-lived JWT (HS256, default 5 min, `type: "access"` claim); refresh token is a long-lived opaque random token (default 30 days, SHA-256 hashed in DB).
 6. Client stores both tokens and `user` in `localStorage`.
-7. All subsequent HTTP requests include `Authorization: Bearer <access_token>`. The `authedFetch()` wrapper automatically refreshes on 401.
+7. All subsequent HTTP requests include `Authorization: Bearer <access_token>`. The `authedFetch()` wrapper automatically refreshes on 401. JWT payload includes `is_admin` and `is_owner` claims; these are extracted by `AuthMiddleware` and stored in `scope["state"]["current_user"]`.
 8. For WebSocket, client first calls `POST /api/auth/ws-ticket` to obtain a one-time ticket, then connects with `?ticket=<ticket>`. The ticket is consumed on handshake and expires in 30 seconds.
 9. `AuthMiddleware` enforces JWT access tokens on all HTTP routes except `/api/auth/*`, `/api/branding`, and `/uploads/*`. It checks the `type: "access"` claim. Revoked tokens are rejected.
 10. `POST /api/auth/refresh` rotates a refresh token: issues a new access/refresh pair, marks the old refresh token as replaced. If a previously-used refresh token is replayed (reuse detection), all refresh tokens for that user are revoked.
@@ -372,6 +374,16 @@ Starlette is provided transitively through Connexion.
 4. `use-chat.js` subscribes to presence events via `useRealtime()` and tracks `onlineUserIds` state from these events.
 5. `MembersSidebar` displays all users from `usersMap`, grouped by online/offline, with green/gray status dots.
 6. `GET /api/users` now includes an `online` boolean per user; `GET /api/users/online` returns just the online user IDs.
+
+### Admin role management
+
+1. The first registered user automatically receives `is_owner=True` and `is_admin=True` via `create_user()` in the repository.
+2. On startup, `migrate_owner()` runs after `_migrate_columns()` — if no owner exists, the user with the earliest `created_at` is promoted to owner + admin.
+3. Admins and the owner can promote/demote other users via `POST /api/users/{id}/admin` with `{ is_admin: true/false }`.
+4. The server owner cannot be demoted (endpoint returns 403).
+5. A user cannot modify their own admin status via this endpoint.
+6. Role badges are displayed in the members sidebar: 👑 for owner, ⭐ for admin.
+7. Admin status changes broadcast a `user_updated` WS event so all connected clients update in real time.
 
 ---
 
@@ -442,6 +454,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Auth always on | Every HTTP and WS request requires a valid JWT access token (WS via one-time ticket), except `/api/auth/*`, `/api/branding`, and `/uploads/*` |
 | Identity from JWT | Author/user IDs derived from token, never from request bodies |
 | IDOR protection | `PATCH /users/{id}` rejects modifications to other users; `DELETE /messages/{id}` rejects deletion of other users' messages |
+| Admin authorization | `POST /users/{id}/admin` requires `is_admin` or `is_owner` in JWT; owner's admin status cannot be modified |
 | XSS sanitization | Chat markdown rendered with snarkdown, sanitized with DOMPurify |
 | JWT algorithm pinning | Only HS256 accepted; `none` and others rejected |
 | JWT validation | Issuer, audience, expiry, and `type: "access"` claim enforced on every decode |
