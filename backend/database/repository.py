@@ -41,6 +41,7 @@ class BackendRepository:
             await _migrate_columns(conn)
             await _migrate_indexes(conn)
         self._queue = asyncio.Queue()
+        self._task = asyncio.get_event_loop().create_task(self._writer_loop())
         await self.migrate_owner()
 
     def start_writer(self):
