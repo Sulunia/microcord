@@ -40,6 +40,7 @@ class BackendRepository:
             await conn.run_sync(Base.metadata.create_all)
             await _migrate_columns(conn)
             await _migrate_indexes(conn)
+        self._queue = asyncio.Queue()
         await self.migrate_owner()
 
     def start_writer(self):
