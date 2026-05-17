@@ -220,7 +220,7 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
 
 function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
-  const { channels, activeChannelId, onSelectChannel, onCreateChannel, onRenameChannel, onDeleteChannel } = channelsState || {};
+  const { channels, activeChannelId, setActiveChannelId: onSelectChannel, createChannel: onCreateChannel, renameChannel: onRenameChannel, deleteChannel: onDeleteChannel } = channelsState || {};
   const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState('');
