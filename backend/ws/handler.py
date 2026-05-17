@@ -43,6 +43,8 @@ async def websocket_endpoint(websocket: WebSocket):
     user_obj = await repo.get_user_by_id(user_id)
     user_data = user_obj.to_public_dict() if user_obj else {"id": user_id}
 
+    channels = await repo.list_channels()
+
     await ws_manager.send_to_connection(
         user_id,
         connection_id,
@@ -51,6 +53,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "data": {
                 "user_ids": ws_manager.connected_user_ids,
                 "connection_id": connection_id,
+                "channels": [c.to_dict() for c in channels],
             },
         },
     )

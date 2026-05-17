@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.8.4**.
+Version **0.9.2**.
 
 ---
 
@@ -22,7 +22,7 @@ Version **0.8.4**.
                           SQLite (WAL mode)
 ```
 
-- **Frontend** — Preact + Vite, served on port 5173. Vite proxies `/api`, `/ws`, `/uploads` to the backend. A shared `RealtimeProvider` context owns the single WebSocket connection; all hooks consume `useRealtime()` for send/subscribe.
+- **Frontend** — Preact + Vite, served on port 5173. Vite proxies `/api`, `/ws`, `/uploads` to the backend. A shared `RealtimeProvider` context owns the single WebSocket connection; all hooks consume `useRealtime()` for send/subscribe. Theme is applied at boot in `main.jsx` via `initTheme()` before Preact mounts.
 - **Backend** — Python 3.12 ASGI app. Starlette wraps Connexion (OpenAPI-driven routes), a native WebSocket endpoint, and a static file mount for uploads.
 - **Database** — SQLite with WAL mode, single-writer asyncio queue for mutations, separate async session pool for reads.
 - **Voice** — Peer-to-peer WebRTC (mesh). Backend is signaling-only relay; audio flows directly between browsers via RTCPeerConnection. Frontend voice logic is split into focused modules: `use-voice.js` (orchestrator), `use-voice-mesh.js` (WebRTC peers + audio elements), `use-voice-participants.js` (participant state + WS events), `voice-sdp.js` (SDP munging), `vad-monitor.js` (VAD).
@@ -52,15 +52,16 @@ microcord/
 │   │   └── spec.yaml           # OpenAPI 3.0 spec — all endpoints & schemas
 │   ├── api/                    # Route handlers (operationId targets)
 │   │   ├── auth.py             # register, login, me, status, ws_ticket, refresh, logout
-│   │   ├── chat.py             # list_messages, send_message, delete_message
+│   │   ├── chat.py             # list_messages, send_message, delete_message (channel_id aware)
+│   │   ├── channels.py         # list_channels, create_channel, update_channel, delete_channel (admin/owner only)
 │   │   ├── config.py           # get_branding (app name, voice channel name)
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
 │   │   ├── users.py            # list_users, get_user, update_user, get_online_users, set_user_admin
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar (thin orchestration via services/utils/)
 │   ├── database/
-│   │   ├── models.py           # SQLAlchemy models (User, Message, RefreshToken)
-│   │   └── repository.py      # Async repository (single-writer queue for SQLite safety; migrate_owner, set_user_admin)
+│   │   ├── models.py           # SQLAlchemy models (User, Channel, Message, RefreshToken)
+│   │   └── repository.py      # Async repository (single-writer queue for SQLite safety; migrate_owner, migrate_default_channel, channel CRUD)
 │   ├── services/
 │   │   ├── auth.py             # Access/refresh token creation, rotation, JWT encode/decode, bcrypt, AuthMiddleware, AuthProvider protocol, LocalProvider; JWT includes is_admin/is_owner claims
 │   │   ├── security_headers.py # Security headers middleware (X-Content-Type-Options, HSTS, CSP, etc.)
@@ -74,14 +75,14 @@ microcord/
 │   │       └── avatar_service.py   # Avatar upload lifecycle (validation, storage, cleanup, DB update, WS broadcast)
 │   └── ws/
 │       ├── manager.py          # Per-user WebSocket map, broadcast, send_to
-│       └── handler.py          # WS endpoint: JWT auth, chat relay, voice + screenshare signaling, presence (online/offline)
+│       └── handler.py          # WS endpoint: JWT auth, chat relay (channel_id), voice + screenshare signaling, presence (online/offline), channel events
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.js          # Preact preset, proxy to backend container
 │   ├── index.html
 │   └── src/
-│       ├── main.jsx            # Mount <App />, import global styles
-│       ├── app.jsx             # Shell: login vs main window, <RealtimeProvider> wrapper, <AuthenticatedApp> with hook composition, resizable sidebar, toggleable members sidebar
+│       ├── main.jsx            # Mount <App />, import global styles, initTheme() before render
+│       ├── app.jsx             # Shell: login vs main window, <RealtimeProvider> wrapper, <AuthenticatedApp> with hook composition (useChannels → useChat), resizable sidebar, toggleable members sidebar
 │       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size, notification sound constants; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
 │       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
 │       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
@@ -97,7 +98,8 @@ microcord/
 │       │   ├── use-voice-mesh.js   # useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) — WebRTC mesh: peer connections, audio senders, remote audio elements, SDP munging, disposePeer/disposeAllPeers/setVolume
 │       │   ├── use-voice-participants.js # useVoiceParticipants({ joinStateRef, onParticipantLeft, onSignal }) — participant REST fetch, speakingUsers state, WS subscriptions for join/leave/mute/speaking/signal events
 │       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
-│       │   ├── use-chat.js         # Paginated messages, subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs), setUserAdmin
+│       │   ├── use-chat.js         # Paginated messages (per-channel via channel_id), subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs), setUserAdmin
+│       │   ├── use-channels.js     # Channel state management: fetch, WS subscriptions (presence_init, channel_created/updated/deleted), create/rename/delete, active channel tracking, unread counts
 │       │   ├── use-voice.js        # Thin orchestrator composing useVoiceMesh + useVoiceParticipants + VAD; join/leave state machine, mute toggle, cleanup ownership
 │       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
 │       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
@@ -108,17 +110,21 @@ microcord/
 │       │   ├── alert-modal.module.css
 │       │   ├── sidebar/
 │       │   │   ├── sidebar.jsx             # Voice channel, participant list, VAD speaking indicator, screenshare controls
-│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator
+│       │   │   ├── server-setup-modal.jsx  # Admin server setup modal (channel management with delete confirmation)
+│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator, server admin button (admin/owner only)
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
-│       │   │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split, header bar with channel name and members toggle
+│       │       │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split, header bar with channel tabs, context menu for rename/delete, create channel modal
 │       │   │   ├── members-sidebar.jsx     # Toggleable right sidebar: all users grouped by online/offline status with presence dots; role badges (👑 owner, ⭐ admin); admin context menu for promote/demote
 │       │   │   ├── message.jsx             # Single message: markdown (snarkdown + DOMPurify), images
-│       │   │   ├── message-input.jsx       # Compose bar with upload
+│       │       │   ├── message-input.jsx       # Compose bar with upload, dynamic channel name placeholder
 │       │   │   └── *.module.css
 │       │   └── screenshare/
 │       │       ├── screenshare-view.jsx    # Video element, fullscreen, volume
 │       │       └── screenshare-view.module.css
+│       └── mobile/
+│           ├── mobile-layout.jsx     # Mobile tabs (chat/voice), channel picker dropdown, create channel modal
+│           └── mobile-layout.module.css
 │       └── styles/
 │           ├── theme.css       # Dark-mode CSS custom properties
 │           └── reset.css
@@ -148,9 +154,13 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | GET | `/api/users/{id}` | `api.users.get_user` | Get user by ID |
 | PATCH | `/api/users/{id}` | `api.users.update_user` | Update own display_name (IDOR-protected) |
 | POST | `/api/users/{id}/admin` | `api.users.set_user_admin` | Promote/demote admin status (admin/owner only; cannot modify owner) |
-| GET | `/api/messages` | `api.chat.list_messages` | Paginated history (`?limit=&cursor=`) |
-| POST | `/api/messages` | `api.chat.send_message` | Send message (author from JWT, broadcasts via WS). Rate limited: 10/10s/user |
+| GET | `/api/messages` | `api.chat.list_messages` | Paginated history (`?limit=&cursor=&channel_id=`); defaults to the default channel |
+| POST | `/api/messages` | `api.chat.send_message` | Send message with optional `channel_id` (author from JWT, broadcasts via WS). Rate limited: 10/10s/user |
 | DELETE | `/api/messages/{id}` | `api.chat.delete_message` | Hard-delete own message (author from JWT, deletes associated file, broadcasts deletion via WS) |
+| GET | `/api/channels` | `api.channels.list_channels` | List all channels |
+| POST | `/api/channels` | `api.channels.create_channel` | Create a new channel (admin/owner only, max 20 channels) |
+| PATCH | `/api/channels/{channel_id}` | `api.channels.update_channel` | Rename a channel (admin/owner only, cannot rename default) |
+| DELETE | `/api/channels/{channel_id}` | `api.channels.delete_channel` | Delete a channel, its messages, and associated media files (admin/owner only, cannot delete default) |
 | POST | `/api/upload` | `api.upload.upload_file` | Upload image (max 50 MB, magic-byte validated). Rate limited: 5/min/user |
 | POST | `/api/avatar` | `api.upload.upload_avatar` | Upload avatar (max 1 MB, JPEG/PNG/AVIF). Rate limited: 5/min/user |
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
@@ -175,8 +185,8 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 
 | Type | Direction | Payload / Purpose |
 |------|-----------|-------------------|
-| `chat_message` | Server → Client | New message broadcast (same shape as `Message` schema) |
-| `chat_message_deleted` | Server → Client | Message deleted; payload `{ id }` — clients remove from local list |
+| `chat_message` | Server → Client | New message broadcast (includes `channel_id`; same shape as `Message` schema) |
+| `chat_message_deleted` | Server → Client | Message deleted; payload `{ id, channel_id }` — clients remove from local list |
 | `voice_participant_joined` | Server → Client | User joined voice |
 | `voice_participant_left` | Server → Client | User left voice |
 | `user_updated` | Server → Client | User profile changed (display_name, avatar, is_admin, is_owner) |
@@ -188,9 +198,12 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `voice_signal` | Both | WebRTC signaling relay for voice (SDP offer/answer, ICE candidate) |
 | `voice_mute` | Both | User toggled mute state; payload `{ user_id, muted }` — server broadcasts to all clients |
 | `voice_speaking` | Both | Client-side VAD detected speaking state change; payload `{ user_id, speaking }` — server broadcasts to all clients (including sender) |
-| `presence_init` | Server → Client | Sent on WS connect; payload `{ user_ids }` — full list of currently online user IDs |
+| `presence_init` | Server → Client | Sent on WS connect; payload `{ user_ids, connection_id, channels }` — full list of currently online user IDs and all channels |
 | `presence_online` | Server → Client | User connected via WebSocket; payload `{ user_id, user }` — includes user object (with is_admin/is_owner) so new users appear in members list without re-fetch; broadcast to all other clients |
 | `presence_offline` | Server → Client | User disconnected from WebSocket; payload `{ user_id }` — broadcast to all clients |
+| `channel_created` | Server → Client | New channel created; payload `{ channel }` — broadcast to all clients |
+| `channel_updated` | Server → Client | Channel renamed; payload `{ channel }` — broadcast to all clients |
+| `channel_deleted` | Server → Client | Channel deleted; payload `{ channel_id }` — broadcast to all clients; clients auto-switch to default channel if active channel was deleted |
 
 ---
 
@@ -246,6 +259,16 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `password_hash` | String | bcrypt hash |
 | `is_admin` | Boolean | Default `False` |
 | `is_owner` | Boolean | Default `False`; first registered user is auto-set to owner (cannot be demoted) |
+| `tick_sound` | Integer | Notification sound ID (1–4), default `1` |
+| `created_at` | DateTime | UTC, auto-set |
+
+### Channel (`backend/database/models.py`)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID (PK) | Auto-generated |
+| `name` | String(40), unique | Channel display name (case-insensitive uniqueness enforced in API) |
+| `is_default` | Boolean | Default `False`; the default channel ("general") cannot be renamed or deleted |
 | `created_at` | DateTime | UTC, auto-set |
 
 ### Message (`backend/database/models.py`)
@@ -254,6 +277,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 |--------|------|-------|
 | `id` | UUID (PK) | Auto-generated |
 | `author_id` | UUID (FK → User) | Set from JWT, never from request body |
+| `channel_id` | UUID (FK → Channel), nullable | Channel the message belongs to; nullable for backward compat, auto-filled with default channel if omitted |
 | `content` | Text | Markdown-rendered on the client |
 | `image_url` | String, nullable | Must start with `/uploads/` |
 | `created_at` | DateTime | UTC, auto-set |
@@ -319,11 +343,23 @@ Starlette is provided transitively through Connexion.
 
 ### Chat message
 
-1. Client `POST /api/messages` with `{ content, image_url? }`.
-2. Handler enqueues DB write via `repository` (single-writer queue).
-3. After write, `ws_manager.broadcast` sends `chat_message` to all connected WebSocket clients.
-4. Clients receive and render in real time; `use-chat.js` appends to local message list.
-5. Pagination: `GET /api/messages?limit=30&before=<uuid>` fetches older pages on scroll-up.
+1. Client `POST /api/messages` with `{ content, image_url?, channel_id? }`.
+2. If `channel_id` is omitted, the backend resolves it to the default channel.
+3. Handler enqueues DB write via `repository` (single-writer queue).
+4. After write, `ws_manager.broadcast` sends `chat_message` (including `channel_id`) to all connected WebSocket clients.
+5. Clients receive and render in real time; `use-chat.js` filters by active channel — messages for other channels increment unread counts instead.
+6. Pagination: `GET /api/messages?limit=30&before=<uuid>&channel_id=<id>` fetches older pages on scroll-up.
+
+### Channels
+
+1. On WebSocket connect, `presence_init` includes a `channels` array — the full list of channels. `use-channels.js` populates state from this.
+2. On HTTP boot, `use-channels.js` also fetches `GET /api/channels` as a fallback.
+3. Admins/owners can create channels via `POST /api/channels` (name 1–40 chars, case-insensitive uniqueness, max 20 channels). On success, `channel_created` is broadcast to all WS clients.
+4. Admins/owners can rename channels via `PATCH /api/channels/{id}` (not the default channel). On success, `channel_updated` is broadcast.
+5. Admins/owners can delete channels via `DELETE /api/channels/{id}` (not the default channel). Deletion cascades: all messages in the channel are deleted first, then associated media files are removed from disk. On success, `channel_deleted` is broadcast; clients auto-switch to the default channel if the active channel was deleted.
+6. Frontend tracks `activeChannelId` — switching channels clears unread count and re-fetches messages for the new channel. `use-chat.js` receives `activeChannelId` and filters/messages accordingly.
+7. Desktop UI: horizontal tab bar with active highlight, right-click context menu for rename/delete, `+` button (admin only) opens a 7.css modal. Mobile UI: dropdown channel picker with create button.
+8. Server admin panel: admins/owners can access a "Server Admin" button in the user profile modal that opens a Server Setup modal. The Channel Management tab lists all channels with delete capability (with confirmation); default channel is protected from deletion.
 
 ### Image upload
 
@@ -406,7 +442,7 @@ Two containers: frontend (Vite dev server, port 5173) and backend (uvicorn `--re
 | `http://localhost:5173` | App (frontend, Vite HMR) |
 | `http://localhost:8000/api/ui/` | Swagger UI |
 
-OpenAPI spec changes (`spec.yaml`) require a manual backend restart.
+OpenAPI spec changes (`spec.yaml`) require a manual backend restart. Database migrations (new columns, new tables like `channels`) are applied automatically on boot via `_migrate_columns()` and `_migrate_indexes()` in `models.py`. A `migrate_default_channel()` call ensures a "general" default channel exists.
 
 ### Production
 
@@ -454,7 +490,7 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Auth always on | Every HTTP and WS request requires a valid JWT access token (WS via one-time ticket), except `/api/auth/*`, `/api/branding`, and `/uploads/*` |
 | Identity from JWT | Author/user IDs derived from token, never from request bodies |
 | IDOR protection | `PATCH /users/{id}` rejects modifications to other users; `DELETE /messages/{id}` rejects deletion of other users' messages |
-| Admin authorization | `POST /users/{id}/admin` requires `is_admin` or `is_owner` in JWT; owner's admin status cannot be modified |
+| Admin authorization | `POST /users/{id}/admin` requires `is_admin` or `is_owner` in JWT; owner's admin status cannot be modified. Channel CRUD (`POST/PATCH/DELETE /api/channels`) requires admin/owner; default channel is protected from rename/delete |
 | XSS sanitization | Chat markdown rendered with snarkdown, sanitized with DOMPurify |
 | JWT algorithm pinning | Only HS256 accepted; `none` and others rejected |
 | JWT validation | Issuer, audience, expiry, and `type: "access"` claim enforced on every decode |

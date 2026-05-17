@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: Microcord API
-  version: "0.8.6"
+  version: "0.9.2"
   description: Minimal Discord-like self-hosted chat and voice API.
 
 servers:
@@ -281,6 +281,107 @@ paths:
         "404":
           description: User not found
 
+  /channels:
+    get:
+      operationId: api.channels.list_channels
+      summary: List all channels
+      responses:
+        "200":
+          description: List of channels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelsResponse"
+
+    post:
+      operationId: api.channels.create_channel
+      summary: Create a new channel (admin/owner only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChannelRequest"
+      responses:
+        "201":
+          description: Channel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+        "400":
+          description: Validation error
+        "403":
+          description: Admin access required
+        "409":
+          description: Channel name already exists
+
+  /channels/{channel_id}:
+    patch:
+      operationId: api.channels.update_channel
+      summary: Rename a channel (admin/owner only, not default)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateChannelRequest"
+      responses:
+        "200":
+          description: Channel updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+        "400":
+          description: Validation error or cannot rename default
+        "403":
+          description: Admin access required
+        "404":
+          description: Channel not found
+        "409":
+          description: Channel name already exists
+
+    delete:
+      operationId: api.channels.delete_channel
+      summary: Delete a channel and its messages (admin/owner only, not default)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Channel deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        "400":
+          description: Cannot delete default channel
+        "403":
+          description: Admin access required
+        "404":
+          description: Channel not found
+
   /messages:
     get:
       operationId: api.chat.list_messages
@@ -298,6 +399,12 @@ paths:
           description: Opaque keyset cursor from a previous response's next_cursor
           schema:
             type: string
+        - name: channel_id
+          in: query
+          description: Filter messages by channel ID (defaults to the default channel)
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
           description: Paginated messages with next cursor
@@ -609,6 +716,11 @@ components:
         image_url:
           type: string
           nullable: true
+        channel_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Target channel ID (defaults to the default channel)
 
     MessagesResponse:
       type: object
@@ -631,6 +743,10 @@ components:
         author_id:
           type: string
           format: uuid
+        channel_id:
+          type: string
+          format: uuid
+          nullable: true
         content:
           type: string
         image_url:
@@ -740,3 +856,45 @@ components:
               type: integer
             image_max_dimension:
               type: integer
+
+    Channel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    ChannelsResponse:
+      type: object
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/Channel"
+
+    CreateChannelRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+
+    UpdateChannelRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40

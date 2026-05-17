@@ -3,7 +3,7 @@ import styles from './message-input.module.css';
 import { MAX_MESSAGE_LENGTH, MAX_IMAGE_BYTES } from '../../constants.js';
 import { AlertModal } from '../alert-modal.jsx';
 
-export function MessageInput({ onSend }) {
+export function MessageInput({ onSend, channelName }) {
   const [text, setText] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -166,7 +166,7 @@ export function MessageInput({ onSend }) {
           ref={textareaRef}
           class={styles.textarea}
           rows={1}
-          placeholder="Message #general"
+          placeholder={`Message #${channelName || 'general'}`}
           value={text}
           onInput={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
