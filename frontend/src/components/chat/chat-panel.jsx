@@ -15,7 +15,7 @@ function getTimestamp(msg) {
 }
 
 export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggleMembers, channels, activeChannelId, onSelectChannel, onCreateChannel, onRenameChannel, onDeleteChannel, unreadCounts }) {
-  const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
+  const { messages, sendMessage, deleteMessage, loadOlder, hasMore, loading } = chat;
   const listRef = useRef(null);
   const contentRef = useRef(null);
   const prevCountRef = useRef(0);
@@ -252,7 +252,11 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
       <div class={styles.chatSection} style={hasScreenshare ? { height: `${(1 - videoRatio) * 100}%` } : undefined}>
         <div class={`${styles.messageList} has-scrollbar`} ref={listRef} onScroll={onScroll}>
           <div ref={contentRef} class={styles.messageContent}>
-            {renderedMessages}
+            {loading && messages.length === 0 ? (
+              <div class={styles.loading}>
+                <progress />
+              </div>
+            ) : renderedMessages}
             <div ref={bottomRef} />
           </div>
         </div>

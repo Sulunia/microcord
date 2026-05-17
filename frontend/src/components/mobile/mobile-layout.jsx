@@ -219,7 +219,7 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
 }
 
 function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
-  const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
+  const { messages, sendMessage, deleteMessage, loadOlder, hasMore, loading } = chat;
   const { channels, activeChannelId, setActiveChannelId: onSelectChannel, createChannel: onCreateChannel, renameChannel: onRenameChannel, deleteChannel: onDeleteChannel, unreadCounts } = channelsState || {};
   const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -377,7 +377,11 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
       )}
       <div class={`${styles.messageList} has-scrollbar`} ref={listRef} onScroll={onScroll}>
         <div ref={contentRef} class={styles.messageContent}>
-          {renderedMessages}
+          {loading && messages.length === 0 ? (
+            <div class={styles.loading}>
+              <progress />
+            </div>
+          ) : renderedMessages}
           <div ref={bottomRef} />
         </div>
       </div>

@@ -536,3 +536,15 @@
   align-items: center;
   justify-content: center;
 }
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 80px;
+}
+
+.loading progress {
+  width: 200px;
+}

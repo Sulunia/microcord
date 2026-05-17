@@ -4,9 +4,11 @@ import './styles/reset.css';
 import './styles/theme.css';
 import { initConfig } from './runtime-config.js';
 import { App } from './app.jsx';
+import { initTheme } from './hooks/use-theme.js';
 
 (async () => {
   await initConfig();
+  initTheme();
   render(<App />, document.getElementById('app'));
 
   if ('serviceWorker' in navigator) {

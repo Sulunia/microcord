@@ -14,6 +14,7 @@ export function useChat(user, setUser, activeChannelId) {
   const [hasMore, setHasMore] = useState(true);
   const [usersMap, setUsersMap] = useState({});
   const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+  const [loading, setLoading] = useState(false);
   const loadingRef = useRef(false);
   const nextCursorRef = useRef(null);
   const userRef = useLatest(user);
@@ -37,6 +38,7 @@ export function useChat(user, setUser, activeChannelId) {
   const fetchMessages = useCallback(async (cursor = null, channelId = null) => {
     if (loadingRef.current) return;
     loadingRef.current = true;
+    setLoading(true);
     try {
       const params = new URLSearchParams({ limit: String(CHAT_PAGE_SIZE) });
       if (cursor) params.set('cursor', cursor);
@@ -54,6 +56,7 @@ export function useChat(user, setUser, activeChannelId) {
       }
     } catch {} finally {
       loadingRef.current = false;
+      setLoading(false);
     }
   }, []);
 
@@ -222,5 +225,5 @@ export function useChat(user, setUser, activeChannelId) {
     author: message.author || usersMap[message.author_id] || null,
   }));
 
-  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, usersMap, onlineUserIds, setUserAdmin };
+  return { messages: hydratedMessages, sendMessage, deleteMessage, loadOlder, hasMore, loading, usersMap, onlineUserIds, setUserAdmin };
 }

@@ -1,6 +1,6 @@
 # Microcord
 
-Minimal self-hosted Discord-like app — text chat, voice channels, and screen sharing. No accounts services, no Redis, no Postgres. Just a single Python process and a SQLite file.
+Minimal self-hosted Discord-like app, with text chat, voice channels, and screen sharing, all in a lightweight process and ready for battle!
 
 ## Quick Start
 
@@ -12,13 +12,13 @@ Open **http://localhost:5173** — register an account and start chatting. The r
 
 ## Features
 
-- **Text chat** — markdown rendering, image uploads with inline preview, paginated history
+- **Text chat** — markdown rendering, image uploads with inline preview, paginated history, multiple chat channels
 - **Voice channel** — peer-to-peer WebRTC audio with per-user volume control
 - **Screen sharing** — peer-to-peer WebRTC video + system audio, one sharer at a time
 - **Real-time** — instant message broadcast via WebSocket
 - **User profiles** — editable display name and avatar
-- **Dark mode** — light/dark theme toggle, persisted per-browser
-- **Admin roles** — server owner (first registered account, cannot be demoted) and admins (promoted by any admin/owner via user list); role badges shown in members sidebar
+- **Dark mode** — light/dark theme toggle, persisted per-browser, applied instantly on boot
+- **Admin roles** — server owner (first registered account, cannot be demoted) and admins (promoted by any admin/owner via user list); role badges shown in members sidebar. Admins can create, rename, and delete chat channels
 - **Resizable sidebars/separators** — drag to resize
 
 ## Architecture
