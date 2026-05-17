@@ -227,8 +227,13 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState('');
   const [modalError, setModalError] = useState(null);
+  const createInputRef = useRef(null);
   const isAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
   const activeChannelName = channels?.find((c) => c.id === activeChannelId)?.name || 'general';
+
+  useEffect(() => {
+    if (showCreateModal && createInputRef.current) createInputRef.current.focus();
+  }, [showCreateModal]);
 
   const handleCreate = async () => {
     setModalError(null);
@@ -401,11 +406,11 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <label style={{ fontSize: '0.82rem' }}>Channel Name</label>
                 <input
+                  ref={createInputRef}
                   type="text"
                   value={modalName}
                   onInput={(e) => setModalName(e.target.value)}
                   maxLength={MAX_CHANNEL_NAME_LENGTH}
-                  autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
                 />
                 {modalError && <div style={{ color: 'var(--mc-danger)', fontSize: '0.78rem' }}>{modalError}</div>}

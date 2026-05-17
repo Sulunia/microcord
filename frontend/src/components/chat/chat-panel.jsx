@@ -31,8 +31,13 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
   const [editName, setEditName] = useState('');
   const [modalName, setModalName] = useState('');
   const [modalError, setModalError] = useState(null);
+  const createInputRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
   const dragging = useRef(false);
+
+  useEffect(() => {
+    if (showCreateModal && createInputRef.current) createInputRef.current.focus();
+  }, [showCreateModal]);
 
   const hasScreenshare = screenshare?.showPanel;
 
@@ -275,11 +280,11 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <label style={{ fontSize: '0.82rem' }}>Channel Name</label>
                 <input
+                  ref={createInputRef}
                   type="text"
                   value={modalName}
                   onInput={(e) => setModalName(e.target.value)}
                   maxLength={MAX_CHANNEL_NAME_LENGTH}
-                  autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
                 />
                 {modalError && <div style={{ color: 'var(--mc-danger)', fontSize: '0.78rem' }}>{modalError}</div>}
