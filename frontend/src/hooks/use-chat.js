@@ -74,6 +74,12 @@ export function useChat(user, setUser, activeChannelId) {
         }
         const msgChannelId = data?.channel_id;
         const currentChannelId = channelIdRef.current;
+        const authorId = author?.id;
+        const currentId = userRef.current?.id;
+        const isOtherUserMessage = authorId && authorId !== currentId;
+        if (isOtherUserMessage) {
+          playTick(author?.tick_sound);
+        }
         if (msgChannelId && currentChannelId && msgChannelId !== currentChannelId) return;
         setMessages((prev) => {
           const existing = prev.findIndex((m) => m.id === data?.id);
@@ -84,12 +90,6 @@ export function useChat(user, setUser, activeChannelId) {
           }
           return [...prev, data];
         });
-        const authorId = author?.id;
-        const currentId = userRef.current?.id;
-        const isOtherUserMessage = authorId && authorId !== currentId;
-        if (isOtherUserMessage) {
-          playTick(author?.tick_sound);
-        }
       }),
       subscribe('chat_message_deleted', (data) => {
         const deletedId = data?.id;
