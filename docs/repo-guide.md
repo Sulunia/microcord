@@ -110,7 +110,8 @@ microcord/
 │       │   ├── alert-modal.module.css
 │       │   ├── sidebar/
 │       │   │   ├── sidebar.jsx             # Voice channel, participant list, VAD speaking indicator, screenshare controls
-│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator
+│       │   │   ├── server-setup-modal.jsx  # Admin server setup modal (channel management with delete confirmation)
+│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator, server admin button (admin/owner only)
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
 │       │       │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split, header bar with channel tabs, context menu for rename/delete, create channel modal
@@ -159,7 +160,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | GET | `/api/channels` | `api.channels.list_channels` | List all channels |
 | POST | `/api/channels` | `api.channels.create_channel` | Create a new channel (admin/owner only, max 20 channels) |
 | PATCH | `/api/channels/{channel_id}` | `api.channels.update_channel` | Rename a channel (admin/owner only, cannot rename default) |
-| DELETE | `/api/channels/{channel_id}` | `api.channels.delete_channel` | Delete a channel and its messages (admin/owner only, cannot delete default) |
+| DELETE | `/api/channels/{channel_id}` | `api.channels.delete_channel` | Delete a channel, its messages, and associated media files (admin/owner only, cannot delete default) |
 | POST | `/api/upload` | `api.upload.upload_file` | Upload image (max 50 MB, magic-byte validated). Rate limited: 5/min/user |
 | POST | `/api/avatar` | `api.upload.upload_avatar` | Upload avatar (max 1 MB, JPEG/PNG/AVIF). Rate limited: 5/min/user |
 | POST | `/api/voice/join` | `api.voice.join_voice` | Join voice channel |
@@ -355,9 +356,10 @@ Starlette is provided transitively through Connexion.
 2. On HTTP boot, `use-channels.js` also fetches `GET /api/channels` as a fallback.
 3. Admins/owners can create channels via `POST /api/channels` (name 1–40 chars, case-insensitive uniqueness, max 20 channels). On success, `channel_created` is broadcast to all WS clients.
 4. Admins/owners can rename channels via `PATCH /api/channels/{id}` (not the default channel). On success, `channel_updated` is broadcast.
-5. Admins/owners can delete channels via `DELETE /api/channels/{id}` (not the default channel). Deletion cascades: all messages in the channel are deleted first. On success, `channel_deleted` is broadcast; clients auto-switch to the default channel if the active channel was deleted.
+5. Admins/owners can delete channels via `DELETE /api/channels/{id}` (not the default channel). Deletion cascades: all messages in the channel are deleted first, then associated media files are removed from disk. On success, `channel_deleted` is broadcast; clients auto-switch to the default channel if the active channel was deleted.
 6. Frontend tracks `activeChannelId` — switching channels clears unread count and re-fetches messages for the new channel. `use-chat.js` receives `activeChannelId` and filters/messages accordingly.
 7. Desktop UI: horizontal tab bar with active highlight, right-click context menu for rename/delete, `+` button (admin only) opens a 7.css modal. Mobile UI: dropdown channel picker with create button.
+8. Server admin panel: admins/owners can access a "Server Admin" button in the user profile modal that opens a Server Setup modal. The Channel Management tab lists all channels with delete capability (with confirmation); default channel is protected from deletion.
 
 ### Image upload
 
