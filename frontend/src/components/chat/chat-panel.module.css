@@ -35,6 +35,11 @@
   border-bottom: 2px solid var(--mc-accent);
 }
 
+.tabUnread:not(.tabActive) {
+  font-weight: 700;
+  color: var(--mc-text);
+}
+
 .addTab {
   font-size: 0.82rem;
   font-weight: 700;

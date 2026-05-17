@@ -515,6 +515,18 @@
   background: var(--mc-msg-hover);
 }
 
+.unreadBadge {
+  margin-left: auto;
+  background: var(--mc-accent);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  min-width: 14px;
+  text-align: center;
+}
+
 .modalOverlay {
   position: fixed;
   inset: 0;

@@ -118,6 +118,7 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
               onCreateChannel={channelsState.createChannel}
               onRenameChannel={channelsState.renameChannel}
               onDeleteChannel={channelsState.deleteChannel}
+              unreadCounts={channelsState.unreadCounts}
             />
             {showMembers && (
               <MembersSidebar usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} currentUser={user} setUserAdmin={chat.setUserAdmin} />

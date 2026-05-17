@@ -14,7 +14,7 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
-export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggleMembers, channels, activeChannelId, onSelectChannel, onCreateChannel, onRenameChannel, onDeleteChannel }) {
+export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggleMembers, channels, activeChannelId, onSelectChannel, onCreateChannel, onRenameChannel, onDeleteChannel, unreadCounts }) {
   const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
   const listRef = useRef(null);
   const contentRef = useRef(null);
@@ -206,7 +206,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
               key={ch.id}
               role="tab"
               aria-selected={ch.id === activeChannelId}
-              class={`${styles.tab} ${ch.id === activeChannelId ? styles.tabActive : ''}`}
+              class={`${styles.tab} ${ch.id === activeChannelId ? styles.tabActive : ''} ${unreadCounts?.[ch.id] ? styles.tabUnread : ''}`}
               onClick={() => onSelectChannel(ch.id)}
               onContextMenu={(e) => handleTabContextMenu(e, ch)}
             >

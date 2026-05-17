@@ -7,6 +7,7 @@ import { useLatest } from './use-latest.js';
 export function useChannels() {
   const [channels, setChannels] = useState([]);
   const [activeChannelId, setActiveChannelId] = useState(null);
+  const [unreadCounts, setUnreadCounts] = useState({});
   const [error, setError] = useState(null);
   const initialLoadDone = useRef(false);
   const activeChannelIdRef = useLatest(activeChannelId);
@@ -61,6 +62,20 @@ export function useChannels() {
             }
             return next;
           });
+          setUnreadCounts((prev) => {
+            const next = { ...prev };
+            delete next[deletedId];
+            return next;
+          });
+        }
+      }),
+      subscribe('chat_message', (data) => {
+        const msgChannelId = data?.channel_id;
+        if (msgChannelId && msgChannelId !== activeChannelIdRef.current) {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            [msgChannelId]: (prev[msgChannelId] || 0) + 1,
+          }));
         }
       }),
     ];
@@ -135,13 +150,26 @@ export function useChannels() {
     }
   }, []);
 
+  const selectChannel = useCallback((id) => {
+    setActiveChannelId(id);
+    if (id) {
+      setUnreadCounts((prev) => {
+        if (!prev[id]) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  }, []);
+
   const activeChannel = channels.find((c) => c.id === activeChannelId) || null;
 
   return {
     channels,
     activeChannelId,
     activeChannel,
-    setActiveChannelId,
+    setActiveChannelId: selectChannel,
+    unreadCounts,
     createChannel,
     renameChannel,
     deleteChannel,

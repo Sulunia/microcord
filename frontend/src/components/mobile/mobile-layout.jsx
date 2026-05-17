@@ -220,7 +220,7 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
 
 function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
-  const { channels, activeChannelId, setActiveChannelId: onSelectChannel, createChannel: onCreateChannel, renameChannel: onRenameChannel, deleteChannel: onDeleteChannel } = channelsState || {};
+  const { channels, activeChannelId, setActiveChannelId: onSelectChannel, createChannel: onCreateChannel, renameChannel: onRenameChannel, deleteChannel: onDeleteChannel, unreadCounts } = channelsState || {};
   const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState('');
@@ -355,6 +355,7 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
               onClick={() => { onSelectChannel(ch.id); setShowChannelPicker(false); }}
             >
               # {ch.name}
+              {unreadCounts?.[ch.id] ? <span class={styles.unreadBadge}>{unreadCounts[ch.id]}</span> : null}
             </button>
           ))}
           {isAdmin && (
@@ -421,9 +422,10 @@ export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, 
   const voiceCount = voice.participants.length;
   const onlineCount = chat.onlineUserIds ? chat.onlineUserIds.size : 0;
   const activeChannelName = channelsState?.activeChannel?.name || 'Chat';
+  const totalUnread = channelsState?.unreadCounts ? Object.values(channelsState.unreadCounts).reduce((a, b) => a + b, 0) : 0;
 
   const tabs = [
-    { id: 'chat', label: `# ${activeChannelName}` },
+    { id: 'chat', label: totalUnread > 0 ? `# ${activeChannelName} (${totalUnread})` : `# ${activeChannelName}` },
     { id: 'voice', label: voiceCount > 0 ? `🎤 Voice (${voiceCount})` : '🎤 Voice' },
     { id: 'users', label: `👥 Users (${onlineCount})` },
   ];
