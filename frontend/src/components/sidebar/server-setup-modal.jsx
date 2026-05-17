@@ -77,7 +77,7 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
                             onClick={() => handleDeleteClick(channel.id)}
                             title={`Delete #${channel.name}`}
                           >
-                            ✕
+                            🗑
                           </button>
                         )}
                       </>

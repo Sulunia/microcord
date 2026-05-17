@@ -284,15 +284,22 @@ class BackendRepository:
             return ch
         return await self._enqueue_write(_write)
 
-    async def delete_channel(self, channel_id: str) -> Channel | None:
+    async def delete_channel(self, channel_id: str) -> tuple[Channel | None, list[str]]:
         async def _write(session):
             result = await session.execute(select(Channel).where(Channel.id == channel_id))
             ch = result.scalar_one_or_none()
             if not ch:
-                return None
+                return None, []
+            msg_result = await session.execute(
+                select(Message.image_url).where(
+                    Message.channel_id == channel_id,
+                    Message.image_url.isnot(None),
+                )
+            )
+            image_urls = [row[0] for row in msg_result.all() if row[0]]
             await session.execute(sa_delete(Message).where(Message.channel_id == channel_id))
             await session.delete(ch)
-            return ch
+            return ch, image_urls
         return await self._enqueue_write(_write)
 
     async def count_channels(self) -> int:

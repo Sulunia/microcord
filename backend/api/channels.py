@@ -1,8 +1,9 @@
 import logging
+import os
 
 from connexion.lifecycle import ConnexionResponse
 
-from constants import MAX_CHANNELS
+from constants import MAX_CHANNELS, UPLOAD_DIR
 from database.repository import repo
 from services.utils.request_context import current_user_is_admin
 from ws.manager import ws_manager
@@ -81,9 +82,18 @@ async def delete_channel(channel_id: str) -> ConnexionResponse:
     if existing_ch.is_default:
         return ConnexionResponse(status_code=400, body={"error": "Cannot delete the default channel"})
 
-    channel = await repo.delete_channel(channel_id)
+    channel, image_urls = await repo.delete_channel(channel_id)
     if not channel:
         return ConnexionResponse(status_code=404, body={"error": "Channel not found"})
+
+    for image_url in image_urls:
+        basename = os.path.basename(image_url)
+        filepath = os.path.join(UPLOAD_DIR, basename)
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except OSError:
+                logger.warning(f"Failed to delete file: {filepath}")
 
     await ws_manager.broadcast({"type": "channel_deleted", "data": {"channel_id": channel_id}})
 
