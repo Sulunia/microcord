@@ -496,3 +496,124 @@
   font-size: 0.72rem;
   line-height: 1;
 }
+
+.serverAdminBtn {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: center;
+  background: var(--mc-bg);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  color: var(--mc-text);
+}
+
+.serverAdminBtn:hover {
+  background: var(--mc-msg-hover);
+}
+
+.setupTablist {
+  display: flex;
+  border-bottom: 1px solid var(--mc-border);
+  margin-bottom: 10px;
+}
+
+.setupTab {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--mc-radius) var(--mc-radius) 0 0;
+  color: var(--mc-text-secondary);
+}
+
+.setupTab:hover {
+  background: var(--mc-msg-hover);
+}
+
+.setupTabActive {
+  color: var(--mc-text);
+  border-color: var(--mc-border);
+  border-bottom: 1px solid var(--mc-bg);
+  margin-bottom: -1px;
+  background: var(--mc-bg);
+}
+
+.channelList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.channelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-radius: var(--mc-radius);
+  gap: 8px;
+}
+
+.channelRow:hover {
+  background: var(--mc-msg-hover);
+}
+
+.channelRowName {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--mc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channelDeleteBtn {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  color: var(--mc-text-secondary);
+  line-height: 1.3;
+}
+
+.channelDeleteBtn:hover {
+  background: var(--mc-danger);
+  color: #fff;
+  border-color: var(--mc-danger);
+}
+
+.channelDeleteConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--mc-bg-alt);
+  border: 1px solid var(--mc-danger);
+  border-radius: var(--mc-radius);
+  font-size: 0.78rem;
+  color: var(--mc-text);
+}
+
+.channelDeleteConfirmActions {
+  display: flex;
+  gap: 6px;
+}
+
+.channelDeleteDanger {
+  color: #fff;
+  background: var(--mc-danger);
+  border-color: var(--mc-danger);
+}
+
+.channelDeleteDanger:hover {
+  opacity: 0.85;
+}

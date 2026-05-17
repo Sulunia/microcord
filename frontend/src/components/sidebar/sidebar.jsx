@@ -28,7 +28,7 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch,
   );
 }
 
-export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style }) {
+export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style, channels, onDeleteChannel }) {
   const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -175,6 +175,8 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
         onSave={onUpdateProfile || (() => false)}
         onUploadAvatar={onUploadAvatar}
         onLogout={onLogout}
+        channels={channels}
+        onDeleteChannel={onDeleteChannel}
       />
     </aside>
   );

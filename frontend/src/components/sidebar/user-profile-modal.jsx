@@ -6,8 +6,9 @@ import { useTheme } from '../../hooks/use-theme.js';
 import { useAudioPreferences } from '../../hooks/use-audio-preferences.js';
 import { startVadMonitor } from '../../hooks/vad-monitor.js';
 import { playNotification } from '../../hooks/audio-notifications.js';
+import { ServerSetupModal } from './server-setup-modal.jsx';
 
-export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, onUploadAvatar, onLogout }) {
+export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, onUploadAvatar, onLogout, channels, onDeleteChannel }) {
   const [displayName, setDisplayName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -19,6 +20,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
   const [audioDevices, setAudioDevices] = useState({ inputs: [], outputs: [] });
   const [selectedTick, setSelectedTick] = useState(1);
   const [micDetected, setMicDetected] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const {
     inputDevice: selectedInput,
     outputDevice: selectedOutput,
@@ -269,6 +271,15 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                 <option value="dark">Dark</option>
               </select>
             </div>
+            {(user?.is_admin || user?.is_owner) && channels && onDeleteChannel && (
+              <button
+                type="button"
+                class={styles.serverAdminBtn}
+                onClick={() => setShowAdmin(true)}
+              >
+                Server Admin ⚙
+              </button>
+            )}
             <div class={styles.profileModalActions}>
               {onLogout && (
                 <button
@@ -296,6 +307,13 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
         </div>
       </div>
       {alertMsg && <AlertModal message={alertMsg} onClose={() => setAlertMsg(null)} />}
+      {showAdmin && channels && onDeleteChannel && (
+        <ServerSetupModal
+          availableChannels={channels}
+          onRequestDeleteChannel={onDeleteChannel}
+          onCloseModal={() => setShowAdmin(false)}
+        />
+      )}
     </div>
   );
 }

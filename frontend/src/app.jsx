@@ -103,6 +103,8 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
             onLogout={logout}
             screenshare={screenshare}
             style={{ width: sidebarWidth, minWidth: sidebarWidth }}
+            channels={channelsState.channels}
+            onDeleteChannel={channelsState.deleteChannel}
           />
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
           <div class={styles.mainArea}>
