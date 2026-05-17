@@ -31,8 +31,12 @@ def _decode_cursor(cursor: str) -> tuple[datetime, str]:
     return ts, msg_id
 
 
-async def list_messages(limit: int = DEFAULT_MESSAGE_LIMIT, cursor: str | None = None) -> dict:
+async def list_messages(limit: int = DEFAULT_MESSAGE_LIMIT, cursor: str | None = None, channel_id: str | None = None) -> dict:
     limit = min(limit, MAX_MESSAGE_LIMIT)
+
+    if not channel_id:
+        default_ch = await repo.get_default_channel()
+        channel_id = default_ch.id if default_ch else None
 
     cursor_ts = None
     cursor_id = None
@@ -43,7 +47,7 @@ async def list_messages(limit: int = DEFAULT_MESSAGE_LIMIT, cursor: str | None =
             logger.exception(f"Invalid cursor: {cursor}")
             return {"messages": [], "next_cursor": None}
 
-    rows, has_next = await repo.list_messages(limit, cursor_ts=cursor_ts, cursor_id=cursor_id)
+    rows, has_next = await repo.list_messages(limit, cursor_ts=cursor_ts, cursor_id=cursor_id, channel_id=channel_id)
 
     messages = [m.to_dict() for m in reversed(rows)]
 
@@ -73,7 +77,7 @@ async def delete_message(message_id: str) -> ConnexionResponse:
             except OSError:
                 logger.warning(f"Failed to delete file: {filepath}")
 
-    await ws_manager.broadcast({"type": "chat_message_deleted", "data": {"id": msg.id}})
+    await ws_manager.broadcast({"type": "chat_message_deleted", "data": {"id": msg.id, "channel_id": msg.channel_id}})
     logger.info(f"Message deleted by {author_id}: {msg.id}")
     return ConnexionResponse(status_code=200, body={"id": msg.id})
 
@@ -92,6 +96,11 @@ async def send_message(body: dict) -> ConnexionResponse:
 
     content = body.get("content", "").strip()
     image_url = body.get("image_url")
+    channel_id = body.get("channel_id")
+
+    if not channel_id:
+        default_ch = await repo.get_default_channel()
+        channel_id = default_ch.id if default_ch else None
 
     if image_url and not image_url.startswith(IMAGE_URL_PREFIX):
         return ConnexionResponse(status_code=400, body={"error": "Invalid image URL"})
@@ -102,7 +111,7 @@ async def send_message(body: dict) -> ConnexionResponse:
     if len(content) > MAX_MESSAGE_CONTENT_LENGTH:
         return ConnexionResponse(status_code=400, body={"error": f"Message too long (max {MAX_MESSAGE_CONTENT_LENGTH} characters)"})
 
-    msg = await repo.create_message(author_id, content, image_url)
+    msg = await repo.create_message(author_id, content, image_url, channel_id=channel_id)
     result = msg.to_dict()
     logger.info(f"Message sent by {author_id}: {result['id']}")
 

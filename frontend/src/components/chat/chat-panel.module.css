@@ -31,6 +31,10 @@
   gap: 3px;
 }
 
+.tabActive {
+  border-bottom: 2px solid var(--mc-accent);
+}
+
 .addTab {
   font-size: 0.82rem;
   font-weight: 700;
@@ -117,4 +121,49 @@
   display: flex;
   flex-direction: column;
   min-height: 100%;
+}
+
+.contextMenu {
+  z-index: 100;
+  background: var(--mc-bg);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+  min-width: 100px;
+  padding: 2px 0;
+}
+
+.contextItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--mc-text);
+}
+
+.contextItem:hover {
+  background: var(--mc-msg-hover);
+}
+
+.contextItemDanger {
+  color: var(--mc-danger);
+}
+
+.contextItemDanger:hover {
+  background: var(--mc-danger);
+  color: #fff;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

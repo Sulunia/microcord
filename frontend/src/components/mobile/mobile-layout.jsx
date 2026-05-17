@@ -3,7 +3,7 @@ import { Message } from '../chat/message.jsx';
 import { MessageInput } from '../chat/message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
 import { UserProfileModal } from '../sidebar/user-profile-modal.jsx';
-import { UI_CONFIG, VOICE_STATE, SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS } from '../../constants.js';
+import { UI_CONFIG, VOICE_STATE, SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, MAX_CHANNEL_NAME_LENGTH } from '../../constants.js';
 import styles from './mobile-layout.module.css';
 
 function getAuthorId(msg) {
@@ -218,8 +218,30 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
   );
 }
 
-function MobileChatTab({ chat, screenshare, currentUser }) {
+function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
+  const { channels, activeChannelId, onSelectChannel, onCreateChannel, onRenameChannel, onDeleteChannel } = channelsState || {};
+  const [showChannelPicker, setShowChannelPicker] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [modalName, setModalName] = useState('');
+  const [modalError, setModalError] = useState(null);
+  const isAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
+  const activeChannelName = channels?.find((c) => c.id === activeChannelId)?.name || 'general';
+
+  const handleCreate = async () => {
+    setModalError(null);
+    const name = modalName.trim();
+    if (!name || name.length > MAX_CHANNEL_NAME_LENGTH) {
+      setModalError('Name must be 1-40 characters');
+      return;
+    }
+    const result = await onCreateChannel(name);
+    if (result) {
+      setShowCreateModal(false);
+      setModalName('');
+      setShowChannelPicker(false);
+    }
+  };
   const listRef = useRef(null);
   const contentRef = useRef(null);
   const prevCountRef = useRef(0);
@@ -318,6 +340,30 @@ function MobileChatTab({ chat, screenshare, currentUser }) {
 
   return (
     <div class={styles.chatView}>
+      <div class={styles.channelPicker}>
+        <button class={styles.channelPickerBtn} onClick={() => setShowChannelPicker(!showChannelPicker)}>
+          <span>#</span> {activeChannelName}
+          <span class={styles.channelPickerArrow}>{showChannelPicker ? '▲' : '▼'}</span>
+        </button>
+      </div>
+      {showChannelPicker && (
+        <div class={styles.channelDropdown}>
+          {(channels || []).map((ch) => (
+            <button
+              key={ch.id}
+              class={`${styles.channelDropdownItem} ${ch.id === activeChannelId ? styles.channelDropdownItemActive : ''}`}
+              onClick={() => { onSelectChannel(ch.id); setShowChannelPicker(false); }}
+            >
+              # {ch.name}
+            </button>
+          ))}
+          {isAdmin && (
+            <button class={styles.channelDropdownAdd} onClick={() => { setShowCreateModal(true); setModalName(''); setModalError(null); }}>
+              + Create Channel
+            </button>
+          )}
+        </div>
+      )}
       {hasScreenshare && (
         <div class={styles.videoSection}>
           <ScreenshareView
@@ -334,19 +380,50 @@ function MobileChatTab({ chat, screenshare, currentUser }) {
           <div ref={bottomRef} />
         </div>
       </div>
-      <MessageInput onSend={sendMessage} />
+      <MessageInput onSend={sendMessage} channelName={activeChannelName} />
+      {showCreateModal && (
+        <div class={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
+          <div class="window glass active" style={{ width: 300, '--w7-w-bg': 'var(--mc-window-glass)' }} onClick={(e) => e.stopPropagation()}>
+            <div class="title-bar">
+              <div class="title-bar-text">Create Channel</div>
+              <div class="title-bar-controls">
+                <button aria-label="Close" onClick={() => setShowCreateModal(false)} />
+              </div>
+            </div>
+            <div class="window-body has-space">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ fontSize: '0.82rem' }}>Channel Name</label>
+                <input
+                  type="text"
+                  value={modalName}
+                  onInput={(e) => setModalName(e.target.value)}
+                  maxLength={MAX_CHANNEL_NAME_LENGTH}
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+                />
+                {modalError && <div style={{ color: 'var(--mc-danger)', fontSize: '0.78rem' }}>{modalError}</div>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, paddingTop: 4 }}>
+                  <button onClick={() => setShowCreateModal(false)}>Cancel</button>
+                  <button onClick={handleCreate}>Create</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout }) {
+export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channelsState }) {
   const [activeTab, setActiveTab] = useState('chat');
 
   const voiceCount = voice.participants.length;
   const onlineCount = chat.onlineUserIds ? chat.onlineUserIds.size : 0;
+  const activeChannelName = channelsState?.activeChannel?.name || 'Chat';
 
   const tabs = [
-    { id: 'chat', label: '# Chat' },
+    { id: 'chat', label: `# ${activeChannelName}` },
     { id: 'voice', label: voiceCount > 0 ? `🎤 Voice (${voiceCount})` : '🎤 Voice' },
     { id: 'users', label: `👥 Users (${onlineCount})` },
   ];
@@ -366,7 +443,7 @@ export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, 
       </div>
       <div class={styles.content}>
         {activeTab === 'chat' && (
-          <MobileChatTab chat={chat} screenshare={screenshare} currentUser={user} />
+          <MobileChatTab chat={chat} screenshare={screenshare} currentUser={user} channelsState={channelsState} />
         )}
         {activeTab === 'voice' && (
           <MobileVoiceTab

@@ -9,7 +9,7 @@ function playTick(tickSound) {
   playNotification(tickUrl(tickSound), NOTIFICATION_VOLUME);
 }
 
-export function useChat(user, setUser) {
+export function useChat(user, setUser, activeChannelId) {
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [usersMap, setUsersMap] = useState({});
@@ -17,6 +17,7 @@ export function useChat(user, setUser) {
   const loadingRef = useRef(false);
   const nextCursorRef = useRef(null);
   const userRef = useLatest(user);
+  const channelIdRef = useLatest(activeChannelId);
 
   const userId = user?.id;
 
@@ -33,12 +34,13 @@ export function useChat(user, setUser) {
     } catch {}
   }, []);
 
-  const fetchMessages = useCallback(async (cursor = null) => {
+  const fetchMessages = useCallback(async (cursor = null, channelId = null) => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
       const params = new URLSearchParams({ limit: String(CHAT_PAGE_SIZE) });
       if (cursor) params.set('cursor', cursor);
+      if (channelId) params.set('channel_id', channelId);
       const res = await authedFetch(`${API_BASE}/messages?${params}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -57,7 +59,7 @@ export function useChat(user, setUser) {
 
   const loadOlder = useCallback(() => {
     if (!hasMore || loadingRef.current || !nextCursorRef.current) return;
-    fetchMessages(nextCursorRef.current);
+    fetchMessages(nextCursorRef.current, channelIdRef.current);
   }, [hasMore, fetchMessages]);
 
   useEffect(() => {
@@ -67,6 +69,9 @@ export function useChat(user, setUser) {
         if (author?.id) {
           setUsersMap((prev) => ({ ...prev, [author.id]: author }));
         }
+        const msgChannelId = data?.channel_id;
+        const currentChannelId = channelIdRef.current;
+        if (msgChannelId && currentChannelId && msgChannelId !== currentChannelId) return;
         setMessages((prev) => {
           const existing = prev.findIndex((m) => m.id === data?.id);
           if (existing >= 0) {
@@ -87,6 +92,12 @@ export function useChat(user, setUser) {
         const deletedId = data?.id;
         if (deletedId) {
           setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+        }
+      }),
+      subscribe('channel_deleted', (data) => {
+        const deletedChId = data?.channel_id;
+        if (deletedChId && deletedChId === channelIdRef.current) {
+          setMessages([]);
         }
       }),
       subscribe('user_updated', (data) => {
@@ -140,8 +151,8 @@ export function useChat(user, setUser) {
   useEffect(() => {
     if (!userId) return;
     fetchUsers();
-    fetchMessages();
-  }, [userId, fetchMessages, fetchUsers]);
+    fetchMessages(null, activeChannelId);
+  }, [userId, fetchMessages, fetchUsers, activeChannelId]);
 
   const sendMessage = useCallback(async (text, imageFile = null) => {
     const u = userRef.current;
@@ -162,10 +173,14 @@ export function useChat(user, setUser) {
 
     if (!text.trim() && !image_url) return;
 
+    const body = { content: text, image_url };
+    const chId = channelIdRef.current;
+    if (chId) body.channel_id = chId;
+
     const res = await authedFetch(`${API_BASE}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text, image_url }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) throw new Error('Send failed');

@@ -2,13 +2,13 @@ import asyncio
 import logging
 from datetime import datetime
 
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, delete as sa_delete, func
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from constants import DB_URL
+from constants import DB_URL, DEFAULT_CHANNEL_NAME
 from database.models import (
-    Base, User, Message, RefreshToken,
+    Base, User, Message, RefreshToken, Channel,
     _enable_wal, _migrate_columns, _migrate_indexes,
 )
 
@@ -43,6 +43,7 @@ class BackendRepository:
         self._queue = asyncio.Queue()
         self._task = asyncio.get_event_loop().create_task(self._writer_loop())
         await self.migrate_owner()
+        await self.migrate_default_channel()
 
     def start_writer(self):
         if self._queue is None:
@@ -100,12 +101,15 @@ class BackendRepository:
         limit: int,
         cursor_ts=None,
         cursor_id=None,
+        channel_id: str | None = None,
     ) -> tuple[list[Message], bool]:
         async with self._session_factory() as session:
             query = (
                 select(Message)
                 .order_by(Message.created_at.desc(), Message.id.desc())
             )
+            if channel_id is not None:
+                query = query.where(Message.channel_id == channel_id)
             if cursor_ts is not None and cursor_id is not None:
                 query = query.where(
                     or_(
@@ -207,9 +211,10 @@ class BackendRepository:
         author_id: str,
         content: str,
         image_url: str | None,
+        channel_id: str | None = None,
     ) -> Message:
         async def _write(session):
-            msg = Message(author_id=author_id, content=content, image_url=image_url)
+            msg = Message(author_id=author_id, content=content, image_url=image_url, channel_id=channel_id)
             session.add(msg)
             await session.flush()
             await session.refresh(msg, attribute_names=["author"])
@@ -242,6 +247,72 @@ class BackendRepository:
             return msg
 
         return await self._enqueue_write(_write)
+
+    async def create_channel(self, name: str, is_default: bool = False) -> Channel:
+        async def _write(session):
+            ch = Channel(name=name, is_default=is_default)
+            session.add(ch)
+            await session.flush()
+            await session.refresh(ch)
+            return ch
+        return await self._enqueue_write(_write)
+
+    async def list_channels(self) -> list[Channel]:
+        async with self._session_factory() as session:
+            result = await session.execute(select(Channel).order_by(Channel.created_at))
+            return list(result.scalars().all())
+
+    async def get_channel(self, channel_id: str) -> Channel | None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(Channel).where(Channel.id == channel_id))
+            return result.scalar_one_or_none()
+
+    async def get_default_channel(self) -> Channel | None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(Channel).where(Channel.is_default == True))
+            return result.scalar_one_or_none()
+
+    async def update_channel(self, channel_id: str, name: str) -> Channel | None:
+        async def _write(session):
+            result = await session.execute(select(Channel).where(Channel.id == channel_id))
+            ch = result.scalar_one_or_none()
+            if not ch:
+                return None
+            ch.name = name
+            await session.flush()
+            await session.refresh(ch)
+            return ch
+        return await self._enqueue_write(_write)
+
+    async def delete_channel(self, channel_id: str) -> Channel | None:
+        async def _write(session):
+            result = await session.execute(select(Channel).where(Channel.id == channel_id))
+            ch = result.scalar_one_or_none()
+            if not ch:
+                return None
+            await session.execute(sa_delete(Message).where(Message.channel_id == channel_id))
+            await session.delete(ch)
+            return ch
+        return await self._enqueue_write(_write)
+
+    async def count_channels(self) -> int:
+        async with self._session_factory() as session:
+            result = await session.execute(select(func.count(Channel.id)))
+            return result.scalar_one()
+
+    async def migrate_default_channel(self):
+        async def _write(session):
+            result = await session.execute(select(Channel).where(Channel.is_default == True))
+            default_ch = result.scalar_one_or_none()
+            if not default_ch:
+                default_ch = Channel(name=DEFAULT_CHANNEL_NAME, is_default=True)
+                session.add(default_ch)
+                await session.flush()
+                await session.refresh(default_ch)
+            await session.execute(
+                Message.__table__.update().where(Message.channel_id.is_(None)).values(channel_id=default_ch.id)
+            )
+        await self._enqueue_write(_write)
 
     async def store_refresh_token(self, user_id: str, token_hash: str, expires_at) -> RefreshToken:
         async def _write(session):

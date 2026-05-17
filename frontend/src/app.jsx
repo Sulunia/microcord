@@ -6,6 +6,7 @@ import { LoginScreen } from './components/login-screen.jsx';
 import { MobileLayout } from './components/mobile/mobile-layout.jsx';
 import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
+import { useChannels } from './hooks/use-channels.js';
 import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
 import { useIsMobile } from './hooks/use-is-mobile.js';
@@ -51,7 +52,7 @@ function HelpModal({ onClose }) {
   );
 }
 
-function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, uploadAvatar }) {
+function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, uploadAvatar, channelsState }) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [showHelp, setShowHelp] = useState(false);
   const [showMembers, setShowMembers] = useState(true);
@@ -111,6 +112,12 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
               currentUser={user}
               showMembers={showMembers}
               onToggleMembers={() => setShowMembers((v) => !v)}
+              channels={channelsState.channels}
+              activeChannelId={channelsState.activeChannelId}
+              onSelectChannel={channelsState.setActiveChannelId}
+              onCreateChannel={channelsState.createChannel}
+              onRenameChannel={channelsState.renameChannel}
+              onDeleteChannel={channelsState.deleteChannel}
             />
             {showMembers && (
               <MembersSidebar usersMap={chat.usersMap} onlineUserIds={chat.onlineUserIds} currentUser={user} setUserAdmin={chat.setUserAdmin} />
@@ -124,7 +131,8 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
 }
 
 function AuthenticatedApp({ user, setUser, logout, updateProfile, uploadAvatar }) {
-  const chat = useChat(user, setUser);
+  const channelsState = useChannels();
+  const chat = useChat(user, setUser, channelsState.activeChannelId);
   const voice = useVoice(user);
   const screenshare = useScreenshare(user, voice.participants, voice.isJoined);
   const isMobile = useIsMobile();
@@ -139,6 +147,7 @@ function AuthenticatedApp({ user, setUser, logout, updateProfile, uploadAvatar }
         onUpdateProfile={updateProfile}
         onUploadAvatar={uploadAvatar}
         onLogout={logout}
+        channelsState={channelsState}
       />
     );
   }
@@ -152,6 +161,7 @@ function AuthenticatedApp({ user, setUser, logout, updateProfile, uploadAvatar }
       logout={logout}
       updateProfile={updateProfile}
       uploadAvatar={uploadAvatar}
+      channelsState={channelsState}
     />
   );
 }

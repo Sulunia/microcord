@@ -16,7 +16,7 @@ export const AUDIO_INPUT_KEY = 'mc-audio-input';
 export const AUDIO_OUTPUT_KEY = 'mc-audio-output';
 export const VAD_SENSITIVITY_KEY = 'mc-vad-sensitivity';
 
-export const APP_VERSION = '0.8.6';
+export const APP_VERSION = '0.9.0';
 
 export const CHAT_PAGE_SIZE = 30;
 
@@ -55,6 +55,7 @@ export const DEFAULT_VIDEO_RATIO = 0.5;
 export const MIN_VIDEO_RATIO = 0.15;
 export const MAX_VIDEO_RATIO = 0.85;
 
+export const MAX_CHANNEL_NAME_LENGTH = 40;
 export const MAX_MESSAGE_LENGTH = 4000;
 export const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 export const MAX_AVATAR_BYTES = 1 * 1024 * 1024;

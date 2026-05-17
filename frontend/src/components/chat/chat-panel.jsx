@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'preact/hooks'
 import { Message } from './message.jsx';
 import { MessageInput } from './message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
-import { SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, DEFAULT_VIDEO_RATIO, MIN_VIDEO_RATIO, MAX_VIDEO_RATIO } from '../../constants.js';
+import { SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, DEFAULT_VIDEO_RATIO, MIN_VIDEO_RATIO, MAX_VIDEO_RATIO, MAX_CHANNEL_NAME_LENGTH } from '../../constants.js';
 import styles from './chat-panel.module.css';
 
 function getAuthorId(msg) {
@@ -14,7 +14,7 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
-export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggleMembers }) {
+export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggleMembers, channels, activeChannelId, onSelectChannel, onCreateChannel, onRenameChannel, onDeleteChannel }) {
   const { messages, sendMessage, deleteMessage, loadOlder, hasMore } = chat;
   const listRef = useRef(null);
   const contentRef = useRef(null);
@@ -26,6 +26,12 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
   const scrollAnchorRef = useRef(null);
 
   const [videoRatio, setVideoRatio] = useState(DEFAULT_VIDEO_RATIO);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingChannelId, setEditingChannelId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [modalName, setModalName] = useState('');
+  const [modalError, setModalError] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
   const dragging = useRef(false);
 
   const hasScreenshare = screenshare?.showPanel;
@@ -139,6 +145,55 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
     window.addEventListener('mouseup', onUp);
   }, []);
 
+  const isAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
+  const activeChannelName = channels?.find((c) => c.id === activeChannelId)?.name || 'general';
+
+  const handleTabContextMenu = useCallback((e, channel) => {
+    if (!isAdmin) return;
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, channel });
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [contextMenu]);
+
+  const handleCreate = async () => {
+    setModalError(null);
+    const name = modalName.trim();
+    if (!name || name.length > MAX_CHANNEL_NAME_LENGTH) {
+      setModalError('Name must be 1-40 characters');
+      return;
+    }
+    const result = await onCreateChannel(name);
+    if (result) {
+      setShowCreateModal(false);
+      setModalName('');
+    }
+  };
+
+  const handleRename = async () => {
+    setModalError(null);
+    const name = editName.trim();
+    if (!name || name.length > MAX_CHANNEL_NAME_LENGTH) {
+      setModalError('Name must be 1-40 characters');
+      return;
+    }
+    const result = await onRenameChannel(editingChannelId, name);
+    if (result) {
+      setEditingChannelId(null);
+      setEditName('');
+    }
+  };
+
+  const handleDelete = async (channelId) => {
+    await onDeleteChannel(channelId);
+    setContextMenu(null);
+  };
+
   const isLocal = screenshare?.isSharing;
   const onDisconnect = isLocal ? screenshare?.stopSharing : screenshare?.stopViewing;
 
@@ -146,10 +201,21 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
     <main class={styles.panel} ref={panelRef}>
       <div class={styles.header}>
         <menu role="tablist" class={styles.tablist}>
-          <button role="tab" aria-selected="true" class={styles.tab}>
-            <span class={styles.hash}>#</span> general
-          </button>
-          <button role="tab" class={styles.addTab} title="Add channel">+</button>
+          {(channels || []).map((ch) => (
+            <button
+              key={ch.id}
+              role="tab"
+              aria-selected={ch.id === activeChannelId}
+              class={`${styles.tab} ${ch.id === activeChannelId ? styles.tabActive : ''}`}
+              onClick={() => onSelectChannel(ch.id)}
+              onContextMenu={(e) => handleTabContextMenu(e, ch)}
+            >
+              <span class={styles.hash}>#</span> {ch.name}
+            </button>
+          ))}
+          {isAdmin && (
+            <button role="tab" class={styles.addTab} title="Add channel" onClick={() => { setShowCreateModal(true); setModalName(''); setModalError(null); }}>+</button>
+          )}
         </menu>
         <button
           class={`${styles.membersBtn} ${showMembers ? styles.membersBtnActive : ''}`}
@@ -164,6 +230,12 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
           </svg>
         </button>
       </div>
+      {contextMenu && !contextMenu.channel.is_default && (
+        <div class={styles.contextMenu} style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y }}>
+          <button class={styles.contextItem} onClick={() => { setEditingChannelId(contextMenu.channel.id); setEditName(contextMenu.channel.name); setModalError(null); setContextMenu(null); }}>Rename</button>
+          <button class={`${styles.contextItem} ${styles.contextItemDanger}`} onClick={() => handleDelete(contextMenu.channel.id)}>Delete</button>
+        </div>
+      )}
       {hasScreenshare && (
         <>
           <div class={styles.videoSection} style={{ height: `${videoRatio * 100}%` }}>
@@ -184,8 +256,68 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
             <div ref={bottomRef} />
           </div>
         </div>
-        <MessageInput onSend={sendMessage} />
+        <MessageInput onSend={sendMessage} channelName={activeChannelName} />
       </div>
+      {showCreateModal && (
+        <div class={styles.modalOverlay} onClick={() => setShowCreateModal(false)}>
+          <div class="window glass active" style={{ width: 340, '--w7-w-bg': 'var(--mc-window-glass)' }} onClick={(e) => e.stopPropagation()}>
+            <div class="title-bar">
+              <div class="title-bar-text">Create Channel</div>
+              <div class="title-bar-controls">
+                <button aria-label="Close" onClick={() => setShowCreateModal(false)} />
+              </div>
+            </div>
+            <div class="window-body has-space">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ fontSize: '0.82rem' }}>Channel Name</label>
+                <input
+                  type="text"
+                  value={modalName}
+                  onInput={(e) => setModalName(e.target.value)}
+                  maxLength={MAX_CHANNEL_NAME_LENGTH}
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+                />
+                {modalError && <div style={{ color: 'var(--mc-danger)', fontSize: '0.78rem' }}>{modalError}</div>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, paddingTop: 4 }}>
+                  <button onClick={() => setShowCreateModal(false)}>Cancel</button>
+                  <button onClick={handleCreate}>Create</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {editingChannelId && (
+        <div class={styles.modalOverlay} onClick={() => setEditingChannelId(null)}>
+          <div class="window glass active" style={{ width: 340, '--w7-w-bg': 'var(--mc-window-glass)' }} onClick={(e) => e.stopPropagation()}>
+            <div class="title-bar">
+              <div class="title-bar-text">Rename Channel</div>
+              <div class="title-bar-controls">
+                <button aria-label="Close" onClick={() => setEditingChannelId(null)} />
+              </div>
+            </div>
+            <div class="window-body has-space">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ fontSize: '0.82rem' }}>Channel Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onInput={(e) => setEditName(e.target.value)}
+                  maxLength={MAX_CHANNEL_NAME_LENGTH}
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
+                />
+                {modalError && <div style={{ color: 'var(--mc-danger)', fontSize: '0.78rem' }}>{modalError}</div>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, paddingTop: 4 }}>
+                  <button onClick={() => setEditingChannelId(null)}>Cancel</button>
+                  <button onClick={handleRename}>Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
