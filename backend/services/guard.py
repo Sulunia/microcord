@@ -91,6 +91,11 @@ class Guard:
             bucket[0] = 0
             bucket[1] = now
 
+        if bucket[2] > 0 and bucket[2] <= now:
+            bucket[0] = 0
+            bucket[1] = now
+            bucket[2] = 0.0
+
         bucket[0] += 1
 
         if bucket[0] > max_hits:
