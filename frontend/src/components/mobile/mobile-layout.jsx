@@ -15,7 +15,7 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
-function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel }) {
+function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap }) {
   const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -139,6 +139,7 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
         onLogout={onLogout}
         channels={channels}
         onDeleteChannel={onDeleteChannel}
+        usersMap={usersMap}
       />
     </div>
   );
@@ -468,6 +469,7 @@ export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, 
             onLogout={onLogout}
             channels={channelsState.channels}
             onDeleteChannel={channelsState.deleteChannel}
+            usersMap={chat.usersMap}
           />
         )}
         {activeTab === 'users' && (

@@ -105,6 +105,7 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
             style={{ width: sidebarWidth, minWidth: sidebarWidth }}
             channels={channelsState.channels}
             onDeleteChannel={channelsState.deleteChannel}
+            usersMap={chat.usersMap}
           />
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
           <div class={styles.mainArea}>

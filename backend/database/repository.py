@@ -206,6 +206,34 @@ class BackendRepository:
             return user
         return await self._enqueue_write(_write)
 
+    async def set_recovery(self, user_id: str, recovery_hash: str, recovery_expires_at) -> User | None:
+        async def _write(session):
+            result = await session.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            if not user:
+                return None
+            user.password_hash = None
+            user.recovery_hash = recovery_hash
+            user.recovery_expires_at = recovery_expires_at
+            await session.flush()
+            await session.refresh(user)
+            return user
+        return await self._enqueue_write(_write)
+
+    async def recover_user(self, user_id: str, new_password_hash: str) -> User | None:
+        async def _write(session):
+            result = await session.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            if not user:
+                return None
+            user.password_hash = new_password_hash
+            user.recovery_hash = None
+            user.recovery_expires_at = None
+            await session.flush()
+            await session.refresh(user)
+            return user
+        return await self._enqueue_write(_write)
+
     async def create_message(
         self,
         author_id: str,

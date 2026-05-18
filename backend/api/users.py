@@ -1,10 +1,14 @@
+import hashlib
 import logging
+import secrets
+from datetime import datetime, timezone, timedelta
 
 from connexion.lifecycle import ConnexionResponse
 
-from constants import DISPLAY_NAME_MAX_LENGTH
+from constants import DISPLAY_NAME_MAX_LENGTH, RECOVERY_PASSPHRASE_LENGTH, RECOVERY_EXPIRY_DAYS
 from database.models import TICK_SOUNDS
 from database.repository import repo
+from services.auth import revoke_all_refresh_tokens
 from services.guard import guard
 from services.utils.request_context import current_user_id, current_user_is_admin, current_user_is_owner
 from ws.manager import ws_manager
@@ -93,3 +97,42 @@ async def set_user_admin(user_id: str, body: dict) -> ConnexionResponse:
 
     logger.info(f"Admin status changed: {public_user['display_name']} ({public_user['id']}) -> is_admin={is_admin}")
     return ConnexionResponse(status_code=200, body=public_user)
+
+
+async def recover_account(user_id: str) -> ConnexionResponse:
+    if not current_user_is_owner():
+        return ConnexionResponse(status_code=403, body={"error": "Owner access required"})
+
+    target = await repo.get_user_by_id(user_id)
+    if not target:
+        return ConnexionResponse(status_code=404, body={"error": "User not found"})
+
+    passphrase = secrets.token_urlsafe(RECOVERY_PASSPHRASE_LENGTH)[:RECOVERY_PASSPHRASE_LENGTH]
+    passphrase_hash = hashlib.sha256(passphrase.encode()).hexdigest()
+
+    caller_id = current_user_id()
+    is_self_recovery = caller_id == user_id
+
+    if is_self_recovery:
+        expires_at = None
+    else:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=RECOVERY_EXPIRY_DAYS)
+
+    user = await repo.set_recovery(user_id, passphrase_hash, expires_at)
+    if user is None:
+        return ConnexionResponse(status_code=404, body={"error": "User not found"})
+
+    if not is_self_recovery:
+        await revoke_all_refresh_tokens(user_id)
+        guard.revoke_user_tokens(user_id)
+
+    await ws_manager.broadcast({
+        "type": "user_updated",
+        "data": {"user_id": user_id, "user": user.to_public_dict()},
+    })
+
+    logger.info(f"Account recovery initiated for {user.name} ({user.id}), self={is_self_recovery}")
+    return ConnexionResponse(status_code=200, body={
+        "recovery_passphrase": passphrase,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    })

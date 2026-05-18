@@ -617,3 +617,176 @@
 .channelDeleteDanger:hover {
   opacity: 0.85;
 }
+
+.recoverySection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recoveryUserList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.recoveryUserRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--mc-radius);
+  flex-wrap: wrap;
+}
+
+.recoveryUserRow:hover {
+  background: var(--mc-msg-hover);
+}
+
+.recoveryUserAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--mc-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.recoveryUserAvatarImg {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.recoveryUserName {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--mc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recoverySelfBadge {
+  font-size: 0.7rem;
+  color: var(--mc-text-muted);
+  font-weight: 400;
+}
+
+.recoveryRoleBadge {
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+.recoveryStatusPending {
+  font-size: 0.68rem;
+  color: var(--mc-accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.recoverBtn {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  color: var(--mc-text-secondary);
+  line-height: 1.4;
+}
+
+.recoverBtn:hover {
+  background: var(--mc-accent);
+  color: #fff;
+  border-color: var(--mc-accent);
+}
+
+.recoveryConfirmActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.recoveryPassphraseDisplay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.recoveryWarning {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--mc-danger);
+  font-weight: 600;
+  text-align: center;
+}
+
+.recoveryPassphraseBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--mc-bg-alt);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.recoveryPassphraseCode {
+  flex: 1;
+  font-family: monospace;
+  font-size: 1.1rem;
+  letter-spacing: 2px;
+  color: var(--mc-text);
+  word-break: break-all;
+}
+
+.recoveryCopyBtn {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  font-size: 0.85rem;
+}
+
+.recoveryCopyBtn:hover {
+  background: var(--mc-msg-hover);
+}
+
+.recoveryExpiry {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--mc-text-muted);
+  text-align: center;
+}
+
+.recoveryError {
+  margin: 0;
+  color: var(--mc-danger);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 4px 8px;
+  background: var(--mc-bg-alt);
+  border-radius: var(--mc-radius);
+}

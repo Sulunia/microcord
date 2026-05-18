@@ -281,6 +281,31 @@ paths:
         "404":
           description: User not found
 
+  /users/{user_id}/recover:
+    post:
+      operationId: api.users.recover_account
+      summary: Initiate account recovery for a user (owner only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Recovery passphrase generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryResponse"
+        "403":
+          description: Not owner
+        "404":
+          description: User not found
+
   /channels:
     get:
       operationId: api.channels.list_channels
@@ -679,6 +704,18 @@ components:
       properties:
         is_admin:
           type: boolean
+
+    RecoveryResponse:
+      type: object
+      properties:
+        recovery_passphrase:
+          type: string
+          description: One-time recovery passphrase (shown only once)
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null if the passphrase never expires (owner's own account)
 
     User:
       type: object
