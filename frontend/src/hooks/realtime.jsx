@@ -51,6 +51,7 @@ export function RealtimeProvider({ user, children }) {
     try {
       const response = await authedFetch(`${API_BASE}/auth/ws-ticket`, { method: 'POST' });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) return;
         reconnectTimerRef.current = setTimeout(connectSocket, WS_RECONNECT_DELAY_MS);
         return;
       }
