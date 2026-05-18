@@ -39,7 +39,7 @@ async def _try_account_recovery(name: str, password: str, passphrase: str) -> Co
     if not existing or not existing.recovery_hash:
         return None
 
-    if existing.recovery_expires_at is not None and existing.recovery_expires_at < datetime.now(timezone.utc):
+    if existing.recovery_expires_at is not None and existing.recovery_expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
         return ConnexionResponse(status_code=403, body={"error": "Recovery passphrase expired"})
 
     provided_hash = hashlib.sha256(passphrase.encode()).hexdigest()
