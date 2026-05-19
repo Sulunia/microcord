@@ -1,7 +1,7 @@
 # Microcord — Repo Guide
 
 Minimal self-hosted Discord-like app with text chat, voice channels, and screen sharing.
-Version **0.9.2**.
+Version **0.9.4**.
 
 ---
 
@@ -51,12 +51,12 @@ microcord/
 │   ├── openapi/
 │   │   └── spec.yaml           # OpenAPI 3.0 spec — all endpoints & schemas
 │   ├── api/                    # Route handlers (operationId targets)
-│   │   ├── auth.py             # register, login, me, status, ws_ticket, refresh, logout
+│   │   ├── auth.py             # register (with account recovery flow), login, me, status, ws_ticket, refresh, logout
 │   │   ├── chat.py             # list_messages, send_message, delete_message (channel_id aware)
 │   │   ├── channels.py         # list_channels, create_channel, update_channel, delete_channel (admin/owner only)
 │   │   ├── config.py           # get_branding (app name, voice channel name)
 │   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
-│   │   ├── users.py            # list_users, get_user, update_user, get_online_users, set_user_admin
+│   │   ├── users.py            # list_users, get_user, update_user, get_online_users, set_user_admin, recover_account
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar (thin orchestration via services/utils/)
 │   ├── database/
@@ -110,7 +110,7 @@ microcord/
 │       │   ├── alert-modal.module.css
 │       │   ├── sidebar/
 │       │   │   ├── sidebar.jsx             # Voice channel, participant list, VAD speaking indicator, screenshare controls
-│       │   │   ├── server-setup-modal.jsx  # Admin server setup modal (channel management with delete confirmation)
+│       │   │   ├── server-setup-modal.jsx  # Admin server setup modal (channel management, account recovery for owner)
 │       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator, server admin button (admin/owner only)
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
@@ -154,6 +154,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | GET | `/api/users/{id}` | `api.users.get_user` | Get user by ID |
 | PATCH | `/api/users/{id}` | `api.users.update_user` | Update own display_name (IDOR-protected) |
 | POST | `/api/users/{id}/admin` | `api.users.set_user_admin` | Promote/demote admin status (admin/owner only; cannot modify owner) |
+| POST | `/api/users/{id}/recover` | `api.users.recover_account` | Generate one-time recovery passphrase for a user (owner only). Returns `{ recovery_passphrase, expires_at }` |
 | GET | `/api/messages` | `api.chat.list_messages` | Paginated history (`?limit=&cursor=&channel_id=`); defaults to the default channel |
 | POST | `/api/messages` | `api.chat.send_message` | Send message with optional `channel_id` (author from JWT, broadcasts via WS). Rate limited: 10/10s/user |
 | DELETE | `/api/messages/{id}` | `api.chat.delete_message` | Hard-delete own message (author from JWT, deletes associated file, broadcasts deletion via WS) |
@@ -259,6 +260,8 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `password_hash` | String | bcrypt hash |
 | `is_admin` | Boolean | Default `False` |
 | `is_owner` | Boolean | Default `False`; first registered user is auto-set to owner (cannot be demoted) |
+| `recovery_hash` | String(128), nullable | SHA-256 hash of the one-time recovery passphrase |
+| `recovery_expires_at` | DateTime, nullable | When the recovery passphrase expires; `null` for owner self-recovery (never expires) |
 | `tick_sound` | Integer | Notification sound ID (1–4), default `1` |
 | `created_at` | DateTime | UTC, auto-set |
 
@@ -330,7 +333,7 @@ Starlette is provided transitively through Connexion.
 ### Authentication
 
 1. Client `POST /api/auth/register` with `{ name, password, passphrase }` or `POST /api/auth/login` with `{ name, password }`.
-2. Registration requires the server passphrase (auto-generated on startup, logged to console; override via `REGISTRATION_PASSPHRASE` env var).
+2. Registration requires the server passphrase (auto-generated on startup, logged to console; override via `REGISTRATION_PASSPHRASE` env var). If the passphrase is wrong, the register handler checks for a pending account recovery via `_try_account_recovery()` — allowing recovery through the same register form.
 3. Both endpoints are rate limited (register: 3/hour/IP; login: 5/min/IP). Exceeding limits triggers exponential backoff up to a cap.
 4. Backend validates credentials (bcrypt verify for login, bcrypt hash for register).
 5. Returns `{ user, access_token, refresh_token }` — access token is a short-lived JWT (HS256, default 5 min, `type: "access"` claim); refresh token is a long-lived opaque random token (default 30 days, SHA-256 hashed in DB).
@@ -421,6 +424,17 @@ Starlette is provided transitively through Connexion.
 6. Role badges are displayed in the members sidebar: 👑 for owner, ⭐ for admin.
 7. Admin status changes broadcast a `user_updated` WS event so all connected clients update in real time.
 
+### Account recovery
+
+1. The server owner can initiate account recovery for any user via `POST /api/users/{id}/recover` (owner-only endpoint).
+2. Backend generates a 10-character one-time recovery passphrase (`secrets.token_urlsafe`), stores its SHA-256 hash in `recovery_hash`, and sets `recovery_expires_at` to 2 days from now.
+3. For the owner recovering their own account, `recovery_expires_at` is `null` (never expires) and their session tokens are preserved.
+4. For non-owner recovery, all refresh tokens are revoked and access tokens are invalidated (via `guard.revoke_user_tokens`), forcing the user offline.
+5. The recovery passphrase is returned in the response and shown once in the frontend's Server Setup modal ("Account Recovery" tab, owner-only).
+6. To recover, the user goes to the register screen and enters their username, the new desired password, and the recovery passphrase in the passphrase field. The `_try_account_recovery()` function in `auth.py` intercepts this during registration.
+7. The recovery passphrase is compared using `hmac.compare_digest` (constant-time) against the stored hash. If valid and not expired, the user's password is reset and they receive a fresh access/refresh token pair.
+8. The `recovery_hash` and `recovery_expires_at` columns are cleared on successful recovery (via `repo.recover_user`).
+
 ---
 
 ## 9. Deployment & Running
@@ -490,7 +504,8 @@ Both directories are gitignored. See README for backup/restore instructions.
 | Auth always on | Every HTTP and WS request requires a valid JWT access token (WS via one-time ticket), except `/api/auth/*`, `/api/branding`, and `/uploads/*` |
 | Identity from JWT | Author/user IDs derived from token, never from request bodies |
 | IDOR protection | `PATCH /users/{id}` rejects modifications to other users; `DELETE /messages/{id}` rejects deletion of other users' messages |
-| Admin authorization | `POST /users/{id}/admin` requires `is_admin` or `is_owner` in JWT; owner's admin status cannot be modified. Channel CRUD (`POST/PATCH/DELETE /api/channels`) requires admin/owner; default channel is protected from rename/delete |
+| Admin authorization | `POST /users/{id}/admin` requires `is_admin` or `is_owner` in JWT; owner's admin status cannot be modified. Channel CRUD (`POST/PATCH/DELETE /api/channels`) requires admin/owner; default channel is protected from rename/delete. `POST /users/{id}/recover` requires `is_owner` |
+| Account recovery | Owner-only recovery initiation. Recovery passphrase stored as SHA-256 hash; compared with `hmac.compare_digest` (constant-time). Non-owner recovery revokes all sessions. Passphrase expires after 2 days (configurable via `RECOVERY_EXPIRY_DAYS`); owner self-recovery passphrase never expires |
 | XSS sanitization | Chat markdown rendered with snarkdown, sanitized with DOMPurify |
 | JWT algorithm pinning | Only HS256 accepted; `none` and others rejected |
 | JWT validation | Issuer, audience, expiry, and `type: "access"` claim enforced on every decode |
