@@ -1,4 +1,5 @@
 FROM node:22-alpine AS frontend
+RUN npm install -g npm@11
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci
