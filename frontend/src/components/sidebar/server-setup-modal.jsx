@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { authedFetch } from '../../hooks/use-user.js';
 import { API_BASE } from '../../constants.js';
+import { ServerConfigView } from '../server-config-view.jsx';
 import styles from './sidebar.module.css';
 
 export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, onCloseModal, currentUser, users }) {
@@ -117,6 +118,12 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
                 Account Recovery
               </button>
             )}
+            <button
+              class={`${styles.setupTab} ${activeTab === 'config' ? styles.setupTabActive : ''}`}
+              onClick={() => setActiveTab('config')}
+            >
+              Server Config
+            </button>
           </div>
           {activeTab === 'channels' && (
             <div class={styles.channelList}>
@@ -239,6 +246,11 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
                   </div>
                 </>
               )}
+            </div>
+          )}
+          {activeTab === 'config' && (
+            <div style={{ overflow: 'auto', maxHeight: 'calc(80vh - 140px)' }}>
+              <ServerConfigView />
             </div>
           )}
         </div>
