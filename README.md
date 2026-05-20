@@ -1,5 +1,7 @@
 # Microcord
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Sulunia/microcord)
+
 Minimal self-hosted Discord-like app, with text chat, voice channels, and screen sharing, all in a lightweight process and ready for battle!
 
 ## Quick Start
