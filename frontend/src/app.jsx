@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'preact/hooks';
+import { useState, useCallback, useRef, useEffect } from 'preact/hooks';
 import { Sidebar } from './components/sidebar/sidebar.jsx';
 import { ChatPanel } from './components/chat/chat-panel.jsx';
 import { MembersSidebar } from './components/chat/members-sidebar.jsx';
@@ -11,41 +11,116 @@ import { useVoice } from './hooks/use-voice.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
 import { useIsMobile } from './hooks/use-is-mobile.js';
 import { RealtimeProvider } from './hooks/realtime.jsx';
-import { UI_CONFIG, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from './constants.js';
+import { UI_CONFIG, LIVE_MEDIA_CONFIG, initLiveMediaConfig, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from './constants.js';
 import styles from './app.module.css';
 
 const standaloneQuery = window.matchMedia('(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)');
 const isPwa = standaloneQuery.matches || window.navigator.standalone === true;
 
 function HelpModal({ onClose }) {
+  const [activeTab, setActiveTab] = useState('markdown');
+  const [serverConfig, setServerConfig] = useState(null);
+
+  useEffect(() => {
+    if (activeTab === 'server') {
+      initLiveMediaConfig().then(() => {
+        setServerConfig({
+          iceServers: LIVE_MEDIA_CONFIG.iceServers,
+          audio: LIVE_MEDIA_CONFIG.audio,
+          screenshare: LIVE_MEDIA_CONFIG.screenshare,
+          media: LIVE_MEDIA_CONFIG.media,
+        });
+      });
+    }
+  }, [activeTab]);
+
   return (
     <div class={styles.overlay} onClick={onClose}>
-        <div class="window glass active" style={{ width: 420, maxHeight: '80vh', '--w7-w-bg': 'var(--mc-window-glass)' }} onClick={(e) => e.stopPropagation()}>
+      <div class="window glass active" style={{ width: 460, maxHeight: '80vh', '--w7-w-bg': 'var(--mc-window-glass)' }} onClick={(e) => e.stopPropagation()}>
         <div class="title-bar">
-          <div class="title-bar-text">Markdown Cheatsheet</div>
+          <div class="title-bar-text">Help</div>
           <div class="title-bar-controls">
             <button aria-label="Close" onClick={onClose} />
           </div>
         </div>
-        <div class="window-body has-space" style={{ overflow: 'auto', maxHeight: 'calc(80vh - 40px)' }}>
-          <table class={styles.cheatsheet}>
-            <thead>
-              <tr><th>Type this</th><th>To get</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
-              <tr><td><code>_italic_</code></td><td><em>italic</em></td></tr>
-              <tr><td><code>~~strike~~</code></td><td><s>strike</s></td></tr>
-              <tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
-              <tr><td><code>```code block```</code></td><td><pre style={{ margin: 0, fontSize: 12 }}>code block</pre></td></tr>
-              <tr><td><code>[link](url)</code></td><td><a href="#">link</a></td></tr>
-              <tr><td><code>![alt](image-url)</code></td><td>Image embed</td></tr>
-              <tr><td><code># Heading</code></td><td><strong style={{ fontSize: 16 }}>Heading</strong></td></tr>
-              <tr><td><code>&gt; quote</code></td><td style={{ borderLeft: '3px solid var(--mc-border)', paddingLeft: 8 }}>quote</td></tr>
-              <tr><td><code>- item</code></td><td>{'• item'}</td></tr>
-              <tr><td><code>---</code></td><td><hr style={{ margin: '4px 0' }} /></td></tr>
-            </tbody>
-          </table>
+        <div class="window-body has-space">
+          <div class={styles.helpTablist}>
+            <button
+              class={`${styles.helpTab} ${activeTab === 'markdown' ? styles.helpTabActive : ''}`}
+              onClick={() => setActiveTab('markdown')}
+            >
+              Markdown
+            </button>
+            <button
+              class={`${styles.helpTab} ${activeTab === 'server' ? styles.helpTabActive : ''}`}
+              onClick={() => setActiveTab('server')}
+            >
+              Server Config
+            </button>
+          </div>
+          <div style={{ overflow: 'auto', maxHeight: 'calc(80vh - 90px)' }}>
+            {activeTab === 'markdown' && (
+              <table class={styles.cheatsheet}>
+                <thead>
+                  <tr><th>Type this</th><th>To get</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+                  <tr><td><code>_italic_</code></td><td><em>italic</em></td></tr>
+                  <tr><td><code>~~strike~~</code></td><td><s>strike</s></td></tr>
+                  <tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+                  <tr><td><code>```code block```</code></td><td><pre style={{ margin: 0, fontSize: 12 }}>code block</pre></td></tr>
+                  <tr><td><code>[link](url)</code></td><td><a href="#">link</a></td></tr>
+                  <tr><td><code>![alt](image-url)</code></td><td>Image embed</td></tr>
+                  <tr><td><code># Heading</code></td><td><strong style={{ fontSize: 16 }}>Heading</strong></td></tr>
+                  <tr><td><code>&gt; quote</code></td><td style={{ borderLeft: '3px solid var(--mc-border)', paddingLeft: 8 }}>quote</td></tr>
+                  <tr><td><code>- item</code></td><td>{'• item'}</td></tr>
+                  <tr><td><code>---</code></td><td><hr style={{ margin: '4px 0' }} /></td></tr>
+                </tbody>
+              </table>
+            )}
+            {activeTab === 'server' && (
+              serverConfig ? (
+                <div class={styles.configSection}>
+                  <h4 class={styles.configHeading}>ICE Servers</h4>
+                  <pre class={styles.configPre}>{JSON.stringify(serverConfig.iceServers, null, 2)}</pre>
+
+                  <h4 class={styles.configHeading}>Audio</h4>
+                  <table class={styles.cheatsheet}>
+                    <tbody>
+                      <tr><td>Echo Cancellation</td><td>{String(serverConfig.audio.echo_cancellation)}</td></tr>
+                      <tr><td>Noise Suppression</td><td>{String(serverConfig.audio.noise_suppression)}</td></tr>
+                      <tr><td>Auto Gain Control</td><td>{String(serverConfig.audio.auto_gain_control)}</td></tr>
+                      <tr><td>Opus Bitrate</td><td>{serverConfig.audio.opus_bitrate} bps</td></tr>
+                      <tr><td>Opus Stereo</td><td>{String(serverConfig.audio.opus_stereo)}</td></tr>
+                    </tbody>
+                  </table>
+
+                  <h4 class={styles.configHeading}>Screenshare</h4>
+                  <table class={styles.cheatsheet}>
+                    <tbody>
+                      <tr><td>Resolution</td><td>{serverConfig.screenshare.width}×{serverConfig.screenshare.height}</td></tr>
+                      <tr><td>Frame Rate</td><td>{serverConfig.screenshare.frameRate} fps</td></tr>
+                    </tbody>
+                  </table>
+
+                  <h4 class={styles.configHeading}>Media Processing</h4>
+                  <table class={styles.cheatsheet}>
+                    <tbody>
+                      <tr><td>AVIF CRF</td><td>{serverConfig.media.avif_crf}</td></tr>
+                      <tr><td>AV1 CRF</td><td>{serverConfig.media.av1_crf}</td></tr>
+                      <tr><td>Video Scale</td><td>{serverConfig.media.video_scale}</td></tr>
+                      <tr><td>Video Max Bitrate</td><td>{serverConfig.media.video_max_bitrate || 'unlimited'}</td></tr>
+                      <tr><td>FFmpeg Threads</td><td>{serverConfig.media.ffmpeg_threads}</td></tr>
+                      <tr><td>Image Max Dimension</td><td>{serverConfig.media.image_max_dimension}px</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p style={{ color: 'var(--mc-text-muted)', fontSize: '0.85rem' }}>Loading server config…</p>
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>
