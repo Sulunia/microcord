@@ -15,7 +15,7 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
-function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap }) {
+function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel }) {
   const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -140,6 +140,9 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
         channels={channels}
         onDeleteChannel={onDeleteChannel}
         usersMap={usersMap}
+        voiceChannels={voiceChannels}
+        onCreateVoiceChannel={onCreateVoiceChannel}
+        onDeleteVoiceChannel={onDeleteVoiceChannel}
       />
     </div>
   );
@@ -428,7 +431,7 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   );
 }
 
-export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channelsState }) {
+export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channelsState, voiceChannelsState }) {
   const [activeTab, setActiveTab] = useState('chat');
 
   const voiceCount = voice.participants.length;
@@ -470,6 +473,9 @@ export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, 
             channels={channelsState.channels}
             onDeleteChannel={channelsState.deleteChannel}
             usersMap={chat.usersMap}
+            voiceChannels={voiceChannelsState?.voiceChannels}
+            onCreateVoiceChannel={voiceChannelsState?.createVoiceChannel}
+            onDeleteVoiceChannel={voiceChannelsState?.deleteVoiceChannel}
           />
         )}
         {activeTab === 'users' && (

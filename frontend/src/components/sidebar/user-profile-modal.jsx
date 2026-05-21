@@ -8,7 +8,7 @@ import { startVadMonitor } from '../../hooks/vad-monitor.js';
 import { playNotification } from '../../hooks/audio-notifications.js';
 import { ServerSetupModal } from './server-setup-modal.jsx';
 
-export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap }) {
+export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel }) {
   const [displayName, setDisplayName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -314,6 +314,9 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
           onCloseModal={() => setShowAdmin(false)}
           currentUser={user}
           users={usersMap ? Object.values(usersMap) : []}
+          voiceChannels={voiceChannels}
+          onCreateVoiceChannel={onCreateVoiceChannel}
+          onDeleteVoiceChannel={onDeleteVoiceChannel}
         />
       )}
     </div>

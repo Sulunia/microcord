@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'preact/hooks';
+import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
 import { UI_CONFIG, VOICE_STATE } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
@@ -28,8 +28,8 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch,
   );
 }
 
-export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style, channels, onDeleteChannel, usersMap }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
+export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel, onJoinVoiceChannel }) {
+  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere, activeChannelId, joinChannel } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const prevIdsRef = useRef(new Set());
@@ -77,6 +77,16 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
           ? 'Disconnect'
           : 'Join Voice';
 
+  const handleVoiceChannelClick = useCallback((channelId) => {
+    if (!isJoined) {
+      if (joinChannel) joinChannel(channelId);
+    } else if (activeChannelId !== channelId) {
+      leave().then(() => {
+        if (joinChannel) joinChannel(channelId);
+      });
+    }
+  }, [isJoined, activeChannelId, joinChannel, leave]);
+
   return (
     <aside class={styles.sidebar} style={style}>
       <div class={`${styles.channel} has-scrollbar`}>
@@ -84,6 +94,24 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
           <span class={styles.channelIcon}>🔊</span>
           <span class={styles.channelName}>{UI_CONFIG.voiceChannelName}</span>
         </div>
+
+        {voiceChannels && voiceChannels.length > 0 && (
+          <div class={styles.voiceChannelList}>
+            {voiceChannels.map((vc) => {
+              const isActive = vc.id === activeChannelId;
+              return (
+                <div
+                  key={vc.id}
+                  class={`${styles.voiceChannelItem} ${isActive ? styles.voiceChannelActive : ''}`}
+                  onClick={() => handleVoiceChannelClick(vc.id)}
+                >
+                  <span>🔊 {vc.name}</span>
+                  <span class={styles.voiceChannelCount}>{vc.participant_count || 0}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <ul class={styles.participantList}>
           {participants.map((p) => {
@@ -178,6 +206,9 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
         channels={channels}
         onDeleteChannel={onDeleteChannel}
         usersMap={usersMap}
+        voiceChannels={voiceChannels}
+        onCreateVoiceChannel={onCreateVoiceChannel}
+        onDeleteVoiceChannel={onDeleteVoiceChannel}
       />
     </aside>
   );

@@ -4,7 +4,7 @@ import { API_BASE } from '../../constants.js';
 import { ServerConfigView } from '../server-config-view.jsx';
 import styles from './sidebar.module.css';
 
-export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, onCloseModal, currentUser, users }) {
+export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, onCloseModal, currentUser, users, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel }) {
   const isOwner = currentUser?.is_owner === true;
   const [activeTab, setActiveTab] = useState(isOwner ? 'channels' : 'channels');
   const [channelPendingDeletion, setChannelPendingDeletion] = useState(null);
@@ -15,6 +15,10 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
   const [recoveryExpiresAt, setRecoveryExpiresAt] = useState(null);
   const [recoveryError, setRecoveryError] = useState(null);
   const [usersList, setUsersList] = useState(users || []);
+  const [newVoiceChannelName, setNewVoiceChannelName] = useState('');
+  const [isCreatingVoiceChannel, setIsCreatingVoiceChannel] = useState(false);
+  const [pendingDeleteVoiceChannel, setPendingDeleteVoiceChannel] = useState(null);
+  const [isDeletingVoiceChannel, setIsDeletingVoiceChannel] = useState(false);
 
   const handleDeleteClick = (channelId) => {
     setChannelPendingDeletion(channelId);
@@ -93,6 +97,35 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
     return null;
   };
 
+  const handleCreateVoiceChannel = async (e) => {
+    e.preventDefault();
+    if (isCreatingVoiceChannel || !newVoiceChannelName.trim()) return;
+    setIsCreatingVoiceChannel(true);
+    try {
+      await onCreateVoiceChannel(newVoiceChannelName.trim());
+      setNewVoiceChannelName('');
+    } catch (err) {
+      console.error('Failed to create voice channel:', err.message);
+    }
+    setIsCreatingVoiceChannel(false);
+  };
+
+  const confirmDeleteVoiceChannel = async () => {
+    if (isDeletingVoiceChannel || !pendingDeleteVoiceChannel) return;
+    setIsDeletingVoiceChannel(true);
+    try {
+      await onDeleteVoiceChannel(pendingDeleteVoiceChannel);
+    } catch (err) {
+      console.error('Failed to delete voice channel:', err.message);
+    }
+    setIsDeletingVoiceChannel(false);
+    setPendingDeleteVoiceChannel(null);
+  };
+
+  const cancelDeleteVoiceChannel = () => {
+    setPendingDeleteVoiceChannel(null);
+  };
+
   return (
     <div class={styles.profileModalBackdrop} onClick={onCloseModal}>
       <div class="window active" style={{ width: 'min(440px, calc(100% - 32px))' }} onClick={(e) => e.stopPropagation()}>
@@ -109,6 +142,12 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
               onClick={() => setActiveTab('channels')}
             >
               Channel Management
+            </button>
+            <button
+              class={`${styles.setupTab} ${activeTab === 'voice' ? styles.setupTabActive : ''}`}
+              onClick={() => setActiveTab('voice')}
+            >
+              Voice Channels
             </button>
             {isOwner && (
               <button
@@ -170,6 +209,57 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
                   </div>
                 );
               })}
+            </div>
+          )}
+          {activeTab === 'voice' && (
+            <div class={styles.channelList}>
+              {currentUser?.is_admin && (
+                <form onSubmit={handleCreateVoiceChannel} style={{ marginBottom: '8px', display: 'flex', gap: '4px' }}>
+                  <input
+                    type="text"
+                    maxLength="24"
+                    placeholder="Voice channel name..."
+                    value={newVoiceChannelName}
+                    onInput={(e) => setNewVoiceChannelName(e.target.value)}
+                    style={{ flex: 1 }}
+                    disabled={isCreatingVoiceChannel}
+                  />
+                  <button type="submit" disabled={!newVoiceChannelName.trim() || isCreatingVoiceChannel}>
+                    {isCreatingVoiceChannel ? 'Creating…' : 'Create'}
+                  </button>
+                </form>
+              )}
+              {(voiceChannels || []).map((vc) => {
+                const canDelete = (voiceChannels || []).length > 1 && (vc.participant_count || 0) === 0;
+                const isPendingDelete = pendingDeleteVoiceChannel === vc.id;
+                return (
+                  <div key={vc.id} class={styles.channelRow}>
+                    {isPendingDelete ? (
+                      <div class={styles.channelDeleteConfirm}>
+                        <span>Delete voice channel "{vc.name}"?</span>
+                        <div class={styles.channelDeleteConfirmActions}>
+                          <button class={styles.channelDeleteDanger} onClick={confirmDeleteVoiceChannel} disabled={isDeletingVoiceChannel}>
+                            {isDeletingVoiceChannel ? 'Deleting…' : 'Confirm'}
+                          </button>
+                          <button onClick={cancelDeleteVoiceChannel} disabled={isDeletingVoiceChannel}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <span class={styles.channelRowName}>🔊 {vc.name} ({vc.participant_count || 0})</span>
+                        {currentUser?.is_admin && canDelete && (
+                          <button class={styles.channelDeleteBtn} onClick={() => setPendingDeleteVoiceChannel(vc.id)} title={`Delete ${vc.name}`}>
+                            🗑
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+              {(voiceChannels || []).length === 0 && (
+                <p style={{ color: 'var(--mc-text-muted)', fontSize: '0.82rem', margin: 0 }}>No voice channels found.</p>
+              )}
             </div>
           )}
           {activeTab === 'recovery' && isOwner && (

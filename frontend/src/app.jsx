@@ -8,6 +8,7 @@ import { useUser } from './hooks/use-user.js';
 import { useChat } from './hooks/use-chat.js';
 import { useChannels } from './hooks/use-channels.js';
 import { useVoice } from './hooks/use-voice.js';
+import { useVoiceChannels } from './hooks/use-voice-channels.js';
 import { useScreenshare } from './hooks/use-screenshare.js';
 import { useIsMobile } from './hooks/use-is-mobile.js';
 import { RealtimeProvider } from './hooks/realtime.jsx';
@@ -74,7 +75,7 @@ function HelpModal({ onClose }) {
   );
 }
 
-function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, uploadAvatar, channelsState }) {
+function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, uploadAvatar, channelsState, voiceChannelsState }) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [showHelp, setShowHelp] = useState(false);
   const [showMembers, setShowMembers] = useState(true);
@@ -128,6 +129,10 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
             channels={channelsState.channels}
             onDeleteChannel={channelsState.deleteChannel}
             usersMap={chat.usersMap}
+            voiceChannels={voiceChannelsState.voiceChannels}
+            onCreateVoiceChannel={voiceChannelsState.createVoiceChannel}
+            onDeleteVoiceChannel={voiceChannelsState.deleteVoiceChannel}
+            onJoinVoiceChannel={voice.joinChannel}
           />
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
           <div class={styles.mainArea}>
@@ -162,6 +167,7 @@ function AuthenticatedApp({ user, setUser, logout, updateProfile, uploadAvatar }
   const voice = useVoice(user);
   const screenshare = useScreenshare(user, voice.participants, voice.isJoined);
   const isMobile = useIsMobile();
+  const voiceChannelsState = useVoiceChannels();
 
   if (isMobile) {
     return (
@@ -174,6 +180,7 @@ function AuthenticatedApp({ user, setUser, logout, updateProfile, uploadAvatar }
         onUploadAvatar={uploadAvatar}
         onLogout={logout}
         channelsState={channelsState}
+        voiceChannelsState={voiceChannelsState}
       />
     );
   }
@@ -188,6 +195,7 @@ function AuthenticatedApp({ user, setUser, logout, updateProfile, uploadAvatar }
       updateProfile={updateProfile}
       uploadAvatar={uploadAvatar}
       channelsState={channelsState}
+      voiceChannelsState={voiceChannelsState}
     />
   );
 }
