@@ -1,16 +1,21 @@
 """Shared test fixtures for Microcord backend tests.
 
 Provides an isolated SQLite database per test with seeded data
-(owner, members, default channel) and clean event-loop lifecycle.
+(owner, members, default channel) and a managed event loop for
+async operations.
+
+NOTE: All fixtures are synchronous so they work with pytest-bdd's
+generated sync test functions. The event loop is managed explicitly
+via the ``async_loop`` fixture.
 """
 
+import asyncio
 import hashlib
 import os
 import sys
 from datetime import datetime, timezone, timedelta
 
 import pytest
-import pytest_asyncio
 
 # ── Bootstrap: set env vars BEFORE importing app code ────────────
 os.environ.setdefault("JWT_SECRET", "test-secret-that-is-at-least-32-characters-long!!")
@@ -56,20 +61,129 @@ def _hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
+# ── FakeConnectionManager ────────────────────────────────────────
+
+class FakeConnectionManager:
+    """Drop-in replacement for ConnectionManager that records calls.
+
+    No real WebSocket connections — all public methods are async no-ops
+    that record their arguments for later assertion.
+    """
+
+    def __init__(self) -> None:
+        self.broadcasts: list[dict] = []
+        self.sent_messages: list[dict] = []
+        self.connections: dict[str, dict] = {}
+
+    # ── Broadcast ────────────────────────────────────────────────
+
+    async def broadcast(
+        self,
+        message: dict,
+        exclude_user: str | None = None,
+        exclude_connection: tuple[str, str] | None = None,
+    ) -> None:
+        self.broadcasts.append({
+            "message": message,
+            "exclude_user": exclude_user,
+            "exclude_connection": exclude_connection,
+        })
+
+    # ── Send ─────────────────────────────────────────────────────
+
+    async def send_to(self, user_id: str, message: dict) -> None:
+        self.sent_messages.append({"user_id": user_id, "message": message})
+
+    async def send_to_connection(
+        self, user_id: str, connection_id: str, message: dict,
+    ) -> None:
+        self.sent_messages.append({
+            "user_id": user_id,
+            "connection_id": connection_id,
+            "message": message,
+        })
+
+    # ── Connect / Disconnect (no-op, just track) ─────────────────
+
+    async def connect(self, user_id: str, websocket=None) -> str:
+        import secrets
+        conn_id = secrets.token_urlsafe(16)
+        if user_id not in self.connections:
+            self.connections[user_id] = {}
+        self.connections[user_id][conn_id] = True
+        return conn_id
+
+    def disconnect(self, user_id: str, connection_id: str) -> bool:
+        user_conns = self.connections.get(user_id)
+        if user_conns is None:
+            return True
+        user_conns.pop(connection_id, None)
+        is_last = len(user_conns) == 0
+        if is_last:
+            del self.connections[user_id]
+        return is_last
+
+    # ── Inspect helpers ──────────────────────────────────────────
+
+    @property
+    def connected_user_ids(self) -> list[str]:
+        return list(self.connections.keys())
+
+    def is_connection_active(self, user_id: str, connection_id: str) -> bool:
+        user_conns = self.connections.get(user_id)
+        return user_conns is not None and connection_id in user_conns
+
+    def get_connections(self, user_id: str) -> dict:
+        return dict(self.connections.get(user_id, {}))
+
+    @property
+    def total_connections(self) -> int:
+        return sum(len(conns) for conns in self.connections.values())
+
+    # ── Test helpers ─────────────────────────────────────────────
+
+    @property
+    def last_broadcast(self) -> dict:
+        """Return the most recent broadcast entry, or raise."""
+        assert self.broadcasts, "No broadcasts recorded"
+        return self.broadcasts[-1]
+
+    def clear(self) -> None:
+        """Reset all recorded calls."""
+        self.broadcasts.clear()
+        self.sent_messages.clear()
+
+
+# ── Managed event loop ───────────────────────────────────────────
+
+@pytest.fixture
+def async_loop():
+    """Provide a managed event loop for the test session.
+
+    All async operations (repo, handlers) run on this loop so that
+    aiosqlite connections stay valid across step function calls.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    loop.close()
+
+
 # ── Fixtures ─────────────────────────────────────────────────────
 
-@pytest_asyncio.fixture
-async def test_repo(tmp_path):
+@pytest.fixture
+def test_repo(tmp_path, async_loop):
     """Provide a fresh BackendRepository backed by a temp SQLite file.
 
-    The repository is fully initialized (tables created, writer started,
-    default channel migrated by init) and seeded with standard test users.
+    The repository is fully initialized (tables created, writer started)
+    and seeded with standard test users. All async setup/teardown runs
+    on the managed ``async_loop``.
     """
     db_path = tmp_path / "test.db"
     db_url = f"sqlite+aiosqlite:///{db_path}"
 
     repository = BackendRepository(db_url)
-    await repository.init()
+    async_loop.run_until_complete(repository.init())
 
     # ── Seed users ───────────────────────────────────────────────
     owner_hash = _hash_password(OWNER_PASSWORD)
@@ -93,19 +207,18 @@ async def test_repo(tmp_path):
             created_at=datetime.now(timezone.utc) + timedelta(seconds=2),
         ))
 
-    await repository._enqueue_write(_seed_users)
+    async_loop.run_until_complete(repository._enqueue_write(_seed_users))
 
     yield repository
 
     # ── Cleanup ──────────────────────────────────────────────────
-    # Cancel the writer task so it doesn't outlive the event loop
     if repository._task and not repository._task.done():
         repository._task.cancel()
-    await repository._engine.dispose()
+    async_loop.run_until_complete(repository._engine.dispose())
 
 
-@pytest_asyncio.fixture
-async def seeded_repo_with_pending_recovery(test_repo):
+@pytest.fixture
+def seeded_repo_with_pending_recovery(test_repo, async_loop):
     """Return a repo where MEMBER (alice) has a pending, non-expired recovery.
 
     Her password_hash is cleared (as set_recovery does) and the recovery
@@ -122,12 +235,12 @@ async def seeded_repo_with_pending_recovery(test_repo):
             user.recovery_hash = VALID_RECOVERY_HASH
             user.recovery_expires_at = expires_at
 
-    await test_repo._enqueue_write(_set_recovery)
+    async_loop.run_until_complete(test_repo._enqueue_write(_set_recovery))
     return test_repo
 
 
-@pytest_asyncio.fixture
-async def seeded_repo_with_expired_recovery(test_repo):
+@pytest.fixture
+def seeded_repo_with_expired_recovery(test_repo, async_loop):
     """Return a repo where MEMBER (alice) has an EXPIRED recovery."""
     expired_at = datetime.now(timezone.utc) - timedelta(hours=1)
 
@@ -140,5 +253,11 @@ async def seeded_repo_with_expired_recovery(test_repo):
             user.recovery_hash = EXPIRED_RECOVERY_HASH
             user.recovery_expires_at = expired_at
 
-    await test_repo._enqueue_write(_set_expired_recovery)
+    async_loop.run_until_complete(test_repo._enqueue_write(_set_expired_recovery))
     return test_repo
+
+
+@pytest.fixture
+def fake_ws():
+    """Provide a FakeConnectionManager for tests that need WS assertions."""
+    return FakeConnectionManager()
