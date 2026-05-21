@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
-import { LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../../constants.js';
-import appStyles from '../../app.module.css';
+import { LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
+import appStyles from '../app.module.css';
 
 export function ServerConfigView() {
   const [serverConfig, setServerConfig] = useState(null);
