@@ -12,7 +12,6 @@ cannot await coroutines.
 """
 
 import hashlib
-from unittest.mock import patch, AsyncMock
 
 import bcrypt
 import pytest
@@ -30,11 +29,15 @@ from conftest import (
 scenarios("features/recovery.feature")
 
 
-# ── Shared context fixture ───────────────────────────────────────
+# ── Shared scenario context fixture ─────────────────────────────
 
 @pytest.fixture
-def ctx(test_repo, fake_ws, async_loop):
-    """Mutable context dict shared across steps within a scenario."""
+def scenario(test_repo, fake_ws, async_loop):
+    """Mutable context dict shared across steps within a scenario.
+
+    Holds per-scenario state: the test repo, fake WS, managed loop,
+    accumulated responses and passphrases.
+    """
     return {
         "repo": test_repo,
         "ws": fake_ws,
@@ -65,24 +68,24 @@ def _run(loop, coro):
 # ══════════════════════════════════════════════════════════════════
 
 @given('the database has owner "owner_user" and member "member_alice"')
-def given_db_with_owner_and_member(ctx):
+def given_db_with_owner_and_member(scenario):
     """Seeded DB already has these users via test_repo fixture."""
     pass
 
 
 @given('the database has owner "owner_user"')
-def given_db_with_owner(ctx):
+def given_db_with_owner(scenario):
     pass
 
 
 @given(parsers.parse('"{username}" has a valid pending recovery'))
-def given_pending_recovery(ctx, username, seeded_repo_with_pending_recovery):
-    ctx["repo"] = seeded_repo_with_pending_recovery
+def given_pending_recovery(scenario, username, seeded_repo_with_pending_recovery):
+    scenario["repo"] = seeded_repo_with_pending_recovery
 
 
 @given(parsers.parse('"{username}" has an expired pending recovery'))
-def given_expired_recovery(ctx, username, seeded_repo_with_expired_recovery):
-    ctx["repo"] = seeded_repo_with_expired_recovery
+def given_expired_recovery(scenario, username, seeded_repo_with_expired_recovery):
+    scenario["repo"] = seeded_repo_with_expired_recovery
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -90,234 +93,198 @@ def given_expired_recovery(ctx, username, seeded_repo_with_expired_recovery):
 # ══════════════════════════════════════════════════════════════════
 
 @when(parsers.parse('"{caller}" initiates recovery for "{target}"'))
-def when_initiate_recovery(ctx, caller, target):
+def when_initiate_recovery(scenario, caller, target, patched_initiate_recovery):
     from api import users as users_mod
-    from services import auth as auth_mod
 
     target_id = _user_name_to_id(target)
     caller_id = _user_name_to_id(caller)
-    is_owner = (caller == OWNER_NAME)
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(users_mod, "repo", ctx["repo"]), \
-         patch.object(users_mod, "ws_manager", ctx["ws"]), \
-         patch.object(users_mod, "current_user_is_owner", return_value=is_owner), \
-         patch.object(users_mod, "current_user_id", return_value=caller_id), \
-         patch.object(auth_mod, "repo", ctx["repo"]), \
-         patch.object(users_mod, "revoke_all_refresh_tokens", new_callable=AsyncMock) as mock_revoke, \
-         patch.object(users_mod, "guard") as mock_guard:
-
+    with patched_initiate_recovery(caller_id) as mocks:
         response = _run(loop, users_mod.recover_account(target_id))
-        ctx["_mock_revoke"] = mock_revoke
-        ctx["_mock_guard"] = mock_guard
 
-    ctx["responses"].append(response)
+    scenario["_mock_revoke"] = mocks["revoke"]
+    scenario["_mock_guard"] = mocks["guard"]
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('"{caller}" initiates recovery for own account'))
-def when_initiate_self_recovery(ctx, caller):
+def when_initiate_self_recovery(scenario, caller, patched_initiate_recovery):
     from api import users as users_mod
-    from services import auth as auth_mod
 
     caller_id = _user_name_to_id(caller)
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(users_mod, "repo", ctx["repo"]), \
-         patch.object(users_mod, "ws_manager", ctx["ws"]), \
-         patch.object(users_mod, "current_user_is_owner", return_value=True), \
-         patch.object(users_mod, "current_user_id", return_value=caller_id), \
-         patch.object(auth_mod, "repo", ctx["repo"]), \
-         patch.object(users_mod, "revoke_all_refresh_tokens", new_callable=AsyncMock) as mock_revoke, \
-         patch.object(users_mod, "guard") as mock_guard:
-
+    with patched_initiate_recovery(caller_id) as mocks:
         response = _run(loop, users_mod.recover_account(caller_id))
-        ctx["_mock_revoke"] = mock_revoke
-        ctx["_mock_guard"] = mock_guard
 
-    ctx["responses"].append(response)
+    scenario["_mock_revoke"] = mocks["revoke"]
+    scenario["_mock_guard"] = mocks["guard"]
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('"{caller}" attempts to initiate recovery for "{target}"'))
-def when_non_owner_tries_recovery(ctx, caller, target):
+def when_non_owner_tries_recovery(scenario, caller, target, patched_recover_basic):
     from api import users as users_mod
 
     target_id = _user_name_to_id(target)
     caller_id = _user_name_to_id(caller)
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(users_mod, "repo", ctx["repo"]), \
-         patch.object(users_mod, "current_user_is_owner", return_value=False), \
-         patch.object(users_mod, "current_user_id", return_value=caller_id):
-
+    with patched_recover_basic(caller_id, is_owner=False):
         response = _run(loop, users_mod.recover_account(target_id))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('"{caller}" attempts to recover a nonexistent account'))
-def when_recover_nonexistent(ctx, caller):
+def when_recover_nonexistent(scenario, caller, patched_recover_basic):
     from api import users as users_mod
 
     caller_id = _user_name_to_id(caller)
     fake_id = "00000000-0000-0000-0000-000000000999"
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(users_mod, "repo", ctx["repo"]), \
-         patch.object(users_mod, "current_user_is_owner", return_value=True), \
-         patch.object(users_mod, "current_user_id", return_value=caller_id):
-
+    with patched_recover_basic(caller_id, is_owner=True):
         response = _run(loop, users_mod.recover_account(fake_id))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('"{caller}" initiates recovery for "{target}" twice'))
-def when_initiate_recovery_twice(ctx, caller, target):
+def when_initiate_recovery_twice(scenario, caller, target, patched_initiate_recovery):
     from api import users as users_mod
-    from services import auth as auth_mod
 
     target_id = _user_name_to_id(target)
     caller_id = _user_name_to_id(caller)
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
     for _ in range(2):
-        with patch.object(users_mod, "repo", ctx["repo"]), \
-             patch.object(users_mod, "ws_manager", ctx["ws"]), \
-             patch.object(users_mod, "current_user_is_owner", return_value=True), \
-             patch.object(users_mod, "current_user_id", return_value=caller_id), \
-             patch.object(auth_mod, "repo", ctx["repo"]), \
-             patch.object(users_mod, "revoke_all_refresh_tokens", new_callable=AsyncMock):
-
+        with patched_initiate_recovery(caller_id):
             response = _run(loop, users_mod.recover_account(target_id))
 
-        ctx["responses"].append(response)
-        ctx["passphrases"].append(response.body.get("recovery_passphrase", ""))
+        scenario["responses"].append(response)
+        scenario["passphrases"].append(response.body.get("recovery_passphrase", ""))
 
 
 @when(parsers.parse(
     '"{username}" recovers with the correct passphrase and new password "{new_password}"'
 ))
-def when_recover_with_correct_passphrase(ctx, username, new_password):
+def when_recover_with_correct_passphrase(scenario, username, new_password, patched_auth_repo):
     from api import auth as auth_mod
-    from services import auth as auth_svc
 
-    passphrase = ctx.get("_generated_passphrase", VALID_RECOVERY_PASSPHRASE)
-    loop = ctx["loop"]
+    passphrase = scenario.get("_generated_passphrase", VALID_RECOVERY_PASSPHRASE)
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]), \
-         patch.object(auth_svc, "repo", ctx["repo"]):
-
+    with patched_auth_repo():
         response = _run(loop, auth_mod._try_account_recovery(
             username, new_password, passphrase
         ))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse(
     '"{username}" recovers with the received passphrase and new password "{new_password}"'
 ))
-def when_recover_with_received_passphrase(ctx, username, new_password):
+def when_recover_with_received_passphrase(scenario, username, new_password, patched_auth_repo):
     from api import auth as auth_mod
-    from services import auth as auth_svc
 
-    passphrase = ctx["responses"][-1].body["recovery_passphrase"]
-    ctx["_generated_passphrase"] = passphrase
-    loop = ctx["loop"]
+    passphrase = scenario["responses"][-1].body["recovery_passphrase"]
+    scenario["_generated_passphrase"] = passphrase
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]), \
-         patch.object(auth_svc, "repo", ctx["repo"]):
-
+    with patched_auth_repo():
         response = _run(loop, auth_mod._try_account_recovery(
             username, new_password, passphrase
         ))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('the system attempts to recover "{username}" with an arbitrary passphrase'))
-def when_try_recovery_arbitrary(ctx, username):
+def when_try_recovery_arbitrary(scenario, username, patched_auth_repo):
     from api import auth as auth_mod
 
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]):
+    with patched_auth_repo():
         result = _run(loop, auth_mod._try_account_recovery(
             username, "any_password", "any_passphrase"
         ))
 
-    ctx["responses"].append(result)
+    scenario["responses"].append(result)
 
 
 @when(parsers.parse('"{username}" attempts to recover with the expired passphrase'))
-def when_recover_with_expired(ctx, username):
+def when_recover_with_expired(scenario, username, patched_auth_repo):
     from api import auth as auth_mod
 
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]):
+    with patched_auth_repo():
         response = _run(loop, auth_mod._try_account_recovery(
             username, "new_password", EXPIRED_RECOVERY_PASSPHRASE
         ))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('"{username}" attempts to recover with passphrase "{passphrase}"'))
-def when_recover_with_wrong_passphrase(ctx, username, passphrase):
+def when_recover_with_wrong_passphrase(scenario, username, passphrase, patched_auth_repo):
     from api import auth as auth_mod
 
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]):
+    with patched_auth_repo():
         response = _run(loop, auth_mod._try_account_recovery(
             username, "new_password", passphrase
         ))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('"{username}" attempts to recover with wrong passphrase'))
-def when_recover_wrong_passphrase_generic(ctx, username):
+def when_recover_wrong_passphrase_generic(scenario, username, patched_auth_repo):
     from api import auth as auth_mod
 
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]):
+    with patched_auth_repo():
         response = _run(loop, auth_mod._try_account_recovery(
             username, "new_pass", "WRONG"
         ))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when(parsers.parse('"{username}" attempts to recover with wrong passphrase again'))
-def when_recover_wrong_passphrase_again(ctx, username):
+def when_recover_wrong_passphrase_again(scenario, username, patched_auth_repo):
     from api import auth as auth_mod
 
-    loop = ctx["loop"]
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]):
+    with patched_auth_repo():
         response = _run(loop, auth_mod._try_account_recovery(
             username, "new_pass", "ALSO_WRONG"
         ))
 
-    ctx["responses"].append(response)
+    scenario["responses"].append(response)
 
 
 @when('the system tries to recover again with the same passphrase')
-def when_retry_same_passphrase(ctx):
+def when_retry_same_passphrase(scenario, patched_auth_repo):
     from api import auth as auth_mod
 
-    username = ctx["responses"][-1].body.get("user", {}).get("name", MEMBER_NAME)
-    loop = ctx["loop"]
+    username = scenario["responses"][-1].body.get("user", {}).get("name", MEMBER_NAME)
+    loop = scenario["loop"]
 
-    with patch.object(auth_mod, "repo", ctx["repo"]):
+    with patched_auth_repo():
         result = _run(loop, auth_mod._try_account_recovery(
             username, "another_password", VALID_RECOVERY_PASSPHRASE
         ))
 
-    ctx["responses"].append(result)
+    scenario["responses"].append(result)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -325,36 +292,36 @@ def when_retry_same_passphrase(ctx):
 # ══════════════════════════════════════════════════════════════════
 
 @then(parsers.parse('the system returns status {status:d} with a passphrase of {length:d} characters'))
-def then_returns_passphrase(ctx, status, length):
-    response = ctx["responses"][-1]
+def then_returns_passphrase(scenario, status, length):
+    response = scenario["responses"][-1]
     assert response.status_code == status
     assert "recovery_passphrase" in response.body
     assert len(response.body["recovery_passphrase"]) == length
 
 
 @then(parsers.parse('the system returns status {status:d}'))
-def then_returns_status(ctx, status):
-    response = ctx["responses"][-1]
+def then_returns_status(scenario, status):
+    response = scenario["responses"][-1]
     assert response.status_code == status
 
 
 @then(parsers.parse('the system returns status {status:d} with error "{error_msg}"'))
-def then_returns_status_with_error(ctx, status, error_msg):
-    response = ctx["responses"][-1]
+def then_returns_status_with_error(scenario, status, error_msg):
+    response = scenario["responses"][-1]
     assert response.status_code == status
     assert error_msg in response.body.get("error", "")
 
 
 @then(parsers.parse('the system returns status {status:d} with error containing "{word}"'))
-def then_returns_status_error_contains(ctx, status, word):
-    response = ctx["responses"][-1]
+def then_returns_status_error_contains(scenario, status, word):
+    response = scenario["responses"][-1]
     assert response.status_code == status
     assert word.lower() in response.body.get("error", "").lower()
 
 
 @then(parsers.parse('the system returns status {status:d} with access_token and refresh_token'))
-def then_returns_tokens(ctx, status):
-    response = ctx["responses"][-1]
+def then_returns_tokens(scenario, status):
+    response = scenario["responses"][-1]
     assert response.status_code == status
     assert "access_token" in response.body
     assert "refresh_token" in response.body
@@ -362,148 +329,148 @@ def then_returns_tokens(ctx, status):
 
 
 @then('the result is None')
-def then_result_is_none(ctx):
-    assert ctx["responses"][-1] is None
+def then_result_is_none(scenario):
+    assert scenario["responses"][-1] is None
 
 
 @then(parsers.parse('the password of "{username}" is removed from the database'))
-def then_password_removed(ctx, username):
+def then_password_removed(scenario, username):
     user_id = _user_name_to_id(username)
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(user_id))
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(user_id))
     assert user.password_hash is None
 
 
 @then('the owner password is removed from the database')
-def then_owner_password_removed(ctx):
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(OWNER_ID))
+def then_owner_password_removed(scenario):
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(OWNER_ID))
     assert user.password_hash is None
 
 
 @then(parsers.parse('a recovery_hash is set for "{username}"'))
-def then_recovery_hash_set(ctx, username):
+def then_recovery_hash_set(scenario, username):
     user_id = _user_name_to_id(username)
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(user_id))
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(user_id))
     assert user.recovery_hash is not None
 
 
 @then(parsers.parse('the recovery of "{username}" has an expiry date'))
-def then_recovery_has_expiry(ctx, username):
+def then_recovery_has_expiry(scenario, username):
     user_id = _user_name_to_id(username)
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(user_id))
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(user_id))
     assert user.recovery_expires_at is not None
 
 
 @then('the recovery has no expiry date')
-def then_recovery_no_expiry(ctx):
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(OWNER_ID))
+def then_recovery_no_expiry(scenario):
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(OWNER_ID))
     assert user.recovery_expires_at is None
 
 
 @then(parsers.parse('the database remains unchanged for "{username}"'))
-def then_db_unchanged(ctx, username):
+def then_db_unchanged(scenario, username):
     user_id = _user_name_to_id(username)
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(user_id))
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(user_id))
     # Password was already None (set by initiate recovery), recovery_hash stays
     assert user.recovery_hash is not None
 
 
 @then(parsers.parse('the tokens of "{username}" are revoked'))
-def then_tokens_revoked(ctx, username):
+def then_tokens_revoked(scenario, username):
     user_id = _user_name_to_id(username)
-    mock_revoke = ctx.get("_mock_revoke")
-    mock_guard = ctx.get("_mock_guard")
+    mock_revoke = scenario.get("_mock_revoke")
+    mock_guard = scenario.get("_mock_guard")
     assert mock_revoke is not None
     mock_revoke.assert_awaited_once_with(user_id)
     mock_guard.revoke_user_tokens.assert_called_once_with(user_id)
 
 
 @then('no tokens are revoked')
-def then_no_tokens_revoked(ctx):
-    mock_revoke = ctx.get("_mock_revoke")
-    mock_guard = ctx.get("_mock_guard")
+def then_no_tokens_revoked(scenario):
+    mock_revoke = scenario.get("_mock_revoke")
+    mock_guard = scenario.get("_mock_guard")
     assert mock_revoke is not None
     mock_revoke.assert_not_awaited()
     mock_guard.revoke_user_tokens.assert_not_called()
 
 
 @then(parsers.parse('a WebSocket "{event_type}" event is broadcast for "{username}"'))
-def then_ws_event_broadcasted(ctx, event_type, username):
+def then_ws_event_broadcasted(scenario, event_type, username):
     user_id = _user_name_to_id(username)
-    assert len(ctx["ws"].broadcasts) >= 1
-    broadcast = ctx["ws"].broadcasts[-1]
+    assert len(scenario["ws"].broadcasts) >= 1
+    broadcast = scenario["ws"].broadcasts[-1]
     assert broadcast["message"]["type"] == event_type
     assert broadcast["message"]["data"]["user_id"] == user_id
 
 
 @then('the recovery_hash in the database is the SHA-256 of the returned passphrase')
-def then_hash_matches_passphrase(ctx):
-    response = ctx["responses"][-1]
+def then_hash_matches_passphrase(scenario):
+    response = scenario["responses"][-1]
     passphrase = response.body["recovery_passphrase"]
     expected_hash = hashlib.sha256(passphrase.encode()).hexdigest()
 
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(MEMBER_ID))
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(MEMBER_ID))
     assert user.recovery_hash == expected_hash
 
 
 @then('the second passphrase is different from the first')
-def then_passphrases_differ(ctx):
-    assert len(ctx["passphrases"]) >= 2
-    assert ctx["passphrases"][0] != ctx["passphrases"][1]
+def then_passphrases_differ(scenario):
+    assert len(scenario["passphrases"]) >= 2
+    assert scenario["passphrases"][0] != scenario["passphrases"][1]
 
 
 @then('the database contains the hash of the second passphrase')
-def then_db_has_second_hash(ctx):
-    expected_hash = hashlib.sha256(ctx["passphrases"][1].encode()).hexdigest()
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(MEMBER_ID))
+def then_db_has_second_hash(scenario):
+    expected_hash = hashlib.sha256(scenario["passphrases"][1].encode()).hexdigest()
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(MEMBER_ID))
     assert user.recovery_hash == expected_hash
 
 
 @then(parsers.parse('"{username}" has the new password "{password}"'))
-def then_user_has_new_password(ctx, username, password):
+def then_user_has_new_password(scenario, username, password):
     user_id = _user_name_to_id(username)
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(user_id))
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(user_id))
     assert user.password_hash is not None
     assert bcrypt.checkpw(password.encode(), user.password_hash.encode())
 
 
 @then('the recovery fields are cleared in the database')
-def then_recovery_cleared(ctx):
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(MEMBER_ID))
+def then_recovery_cleared(scenario):
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(MEMBER_ID))
     assert user.recovery_hash is None
     assert user.recovery_expires_at is None
 
 
 @then('the recovery state remains in the database')
-def then_recovery_remains(ctx):
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(MEMBER_ID))
+def then_recovery_remains(scenario):
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(MEMBER_ID))
     assert user.recovery_hash is not None
 
 
 @then('the third attempt returns status 200')
-def then_third_attempt_200(ctx):
-    response = ctx["responses"][-1]
+def then_third_attempt_200(scenario):
+    response = scenario["responses"][-1]
     assert response.status_code == 200
 
 
 @then('the second attempt returns None')
-def then_second_attempt_none(ctx):
-    assert ctx["responses"][-1] is None
+def then_second_attempt_none(scenario):
+    assert scenario["responses"][-1] is None
 
 
 @then(parsers.parse('the old password of "{username}" no longer works'))
-def then_old_password_fails(ctx, username):
+def then_old_password_fails(scenario, username):
     user_id = _user_name_to_id(username)
-    loop = ctx["loop"]
-    user = _run(loop, ctx["repo"].get_user_by_id(user_id))
+    loop = scenario["loop"]
+    user = _run(loop, scenario["repo"].get_user_by_id(user_id))
     assert not bcrypt.checkpw(MEMBER_PASSWORD.encode(), user.password_hash.encode())

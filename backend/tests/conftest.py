@@ -13,7 +13,9 @@ import asyncio
 import hashlib
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
+from unittest.mock import patch, AsyncMock
 
 import pytest
 
@@ -169,7 +171,82 @@ def async_loop():
     loop.close()
 
 
-# ── Fixtures ─────────────────────────────────────────────────────
+# ── Patch fixtures ───────────────────────────────────────────────
+
+@pytest.fixture
+def patched_initiate_recovery(test_repo, fake_ws):
+    """Context manager that applies all patches needed to call
+    ``users_mod.recover_account()`` as owner (with WS side-effects).
+
+    Usage::
+
+        with patched_initiate_recovery(caller_id) as mocks:
+            response = _run(loop, users_mod.recover_account(target_id))
+    """
+    from api import users as users_mod
+    from services import auth as auth_mod
+
+    @contextmanager
+    def _patcher(caller_id: str):
+        with patch.object(users_mod, "repo", test_repo), \
+             patch.object(users_mod, "ws_manager", fake_ws), \
+             patch.object(users_mod, "current_user_is_owner", return_value=True), \
+             patch.object(users_mod, "current_user_id", return_value=caller_id), \
+             patch.object(auth_mod, "repo", test_repo), \
+             patch.object(users_mod, "revoke_all_refresh_tokens", new_callable=AsyncMock) as mock_revoke, \
+             patch.object(users_mod, "guard") as mock_guard:
+
+            yield {"revoke": mock_revoke, "guard": mock_guard}
+
+    return _patcher
+
+
+@pytest.fixture
+def patched_auth_repo(test_repo):
+    """Context manager that patches both ``api.auth.repo`` and
+    ``services.auth.repo`` with the test repository.
+
+    Usage::
+
+        with patched_auth_repo():
+            response = _run(loop, auth_mod._try_account_recovery(...))
+    """
+    from api import auth as auth_mod
+    from services import auth as auth_svc
+
+    @contextmanager
+    def _patcher():
+        with patch.object(auth_mod, "repo", test_repo), \
+             patch.object(auth_svc, "repo", test_repo):
+            yield
+
+    return _patcher
+
+
+@pytest.fixture
+def patched_recover_basic(test_repo):
+    """Context manager that applies minimal patches for calling
+    ``users_mod.recover_account()`` without WS side-effects
+    (non-owner / error paths that bail out early).
+
+    Usage::
+
+        with patched_recover_basic(caller_id, is_owner=False):
+            response = _run(loop, users_mod.recover_account(target_id))
+    """
+    from api import users as users_mod
+
+    @contextmanager
+    def _patcher(caller_id: str, is_owner: bool = False):
+        with patch.object(users_mod, "repo", test_repo), \
+             patch.object(users_mod, "current_user_is_owner", return_value=is_owner), \
+             patch.object(users_mod, "current_user_id", return_value=caller_id):
+            yield
+
+    return _patcher
+
+
+# ── Database fixtures ────────────────────────────────────────────
 
 @pytest.fixture
 def test_repo(tmp_path, async_loop):
