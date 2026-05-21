@@ -21,6 +21,8 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    recovery_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    recovery_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     is_owner: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     tick_sound: Mapped[int] = mapped_column(Integer, default=1, server_default="1")

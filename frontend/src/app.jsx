@@ -12,40 +12,62 @@ import { useScreenshare } from './hooks/use-screenshare.js';
 import { useIsMobile } from './hooks/use-is-mobile.js';
 import { RealtimeProvider } from './hooks/realtime.jsx';
 import { UI_CONFIG, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH } from './constants.js';
+import { ServerConfigView } from './components/server-config-view.jsx';
 import styles from './app.module.css';
 
 const standaloneQuery = window.matchMedia('(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen)');
 const isPwa = standaloneQuery.matches || window.navigator.standalone === true;
 
 function HelpModal({ onClose }) {
+  const [activeTab, setActiveTab] = useState('markdown');
+
   return (
     <div class={styles.overlay} onClick={onClose}>
-        <div class="window glass active" style={{ width: 420, maxHeight: '80vh', '--w7-w-bg': 'var(--mc-window-glass)' }} onClick={(e) => e.stopPropagation()}>
+      <div class="window glass active" style={{ width: 460, maxHeight: '80vh', '--w7-w-bg': 'var(--mc-window-glass)' }} onClick={(e) => e.stopPropagation()}>
         <div class="title-bar">
-          <div class="title-bar-text">Markdown Cheatsheet</div>
+          <div class="title-bar-text">Help</div>
           <div class="title-bar-controls">
             <button aria-label="Close" onClick={onClose} />
           </div>
         </div>
-        <div class="window-body has-space" style={{ overflow: 'auto', maxHeight: 'calc(80vh - 40px)' }}>
-          <table class={styles.cheatsheet}>
-            <thead>
-              <tr><th>Type this</th><th>To get</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
-              <tr><td><code>_italic_</code></td><td><em>italic</em></td></tr>
-              <tr><td><code>~~strike~~</code></td><td><s>strike</s></td></tr>
-              <tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
-              <tr><td><code>```code block```</code></td><td><pre style={{ margin: 0, fontSize: 12 }}>code block</pre></td></tr>
-              <tr><td><code>[link](url)</code></td><td><a href="#">link</a></td></tr>
-              <tr><td><code>![alt](image-url)</code></td><td>Image embed</td></tr>
-              <tr><td><code># Heading</code></td><td><strong style={{ fontSize: 16 }}>Heading</strong></td></tr>
-              <tr><td><code>&gt; quote</code></td><td style={{ borderLeft: '3px solid var(--mc-border)', paddingLeft: 8 }}>quote</td></tr>
-              <tr><td><code>- item</code></td><td>{'• item'}</td></tr>
-              <tr><td><code>---</code></td><td><hr style={{ margin: '4px 0' }} /></td></tr>
-            </tbody>
-          </table>
+        <div class="window-body has-space">
+          <div class={styles.helpTablist}>
+            <button
+              class={`${styles.helpTab} ${activeTab === 'markdown' ? styles.helpTabActive : ''}`}
+              onClick={() => setActiveTab('markdown')}
+            >
+              Markdown
+            </button>
+            <button
+              class={`${styles.helpTab} ${activeTab === 'server' ? styles.helpTabActive : ''}`}
+              onClick={() => setActiveTab('server')}
+            >
+              Server Config
+            </button>
+          </div>
+          <div style={{ overflow: 'auto', maxHeight: 'calc(80vh - 90px)' }}>
+            {activeTab === 'markdown' && (
+              <table class={styles.cheatsheet}>
+                <thead>
+                  <tr><th>Type this</th><th>To get</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>**bold**</code></td><td><strong>bold</strong></td></tr>
+                  <tr><td><code>_italic_</code></td><td><em>italic</em></td></tr>
+                  <tr><td><code>~~strike~~</code></td><td><s>strike</s></td></tr>
+                  <tr><td><code>`inline code`</code></td><td><code>inline code</code></td></tr>
+                  <tr><td><code>```code block```</code></td><td><pre style={{ margin: 0, fontSize: 12 }}>code block</pre></td></tr>
+                  <tr><td><code>[link](url)</code></td><td><a href="#">link</a></td></tr>
+                  <tr><td><code>![alt](image-url)</code></td><td>Image embed</td></tr>
+                  <tr><td><code># Heading</code></td><td><strong style={{ fontSize: 16 }}>Heading</strong></td></tr>
+                  <tr><td><code>&gt; quote</code></td><td style={{ borderLeft: '3px solid var(--mc-border)', paddingLeft: 8 }}>quote</td></tr>
+                  <tr><td><code>- item</code></td><td>{'• item'}</td></tr>
+                  <tr><td><code>---</code></td><td><hr style={{ margin: '4px 0' }} /></td></tr>
+                </tbody>
+              </table>
+            )}
+            {activeTab === 'server' && <ServerConfigView />}
+          </div>
         </div>
       </div>
     </div>
@@ -105,6 +127,7 @@ function DesktopLayout({ chat, voice, screenshare, user, logout, updateProfile, 
             style={{ width: sidebarWidth, minWidth: sidebarWidth }}
             channels={channelsState.channels}
             onDeleteChannel={channelsState.deleteChannel}
+            usersMap={chat.usersMap}
           />
           <div class={styles.resizeHandle} onMouseDown={onMouseDown} />
           <div class={styles.mainArea}>

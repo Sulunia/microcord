@@ -55,11 +55,12 @@ export function LoginScreen({ onRegister, onLogin, error }) {
             <div class={styles.fieldGroup}>
               <label for="login-pw">Password</label>
               <input
-                id="login-pw"
-                type="password"
-                value={password}
-                onInput={(e) => setPassword(e.target.value)}
-              />
+                  id="login-pw"
+                  type="password"
+                  autocomplete={isLoginMode ? 'current-password' : 'new-password'}
+                  value={password}
+                  onInput={(e) => setPassword(e.target.value)}
+                />
             </div>
             {!isLoginMode && (
               <div class={styles.fieldGroup}>
@@ -67,6 +68,7 @@ export function LoginScreen({ onRegister, onLogin, error }) {
                 <input
                   id="login-passphrase"
                   type="password"
+                  autocomplete="off"
                   value={passphrase}
                   onInput={(e) => setPassphrase(e.target.value)}
                   placeholder="Ask the server admin"

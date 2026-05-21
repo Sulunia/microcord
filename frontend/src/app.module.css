@@ -68,3 +68,55 @@
   border-radius: 3px;
   font-size: 12px;
 }
+
+.helpTablist {
+  display: flex;
+  border-bottom: 1px solid var(--mc-border);
+  margin-bottom: 10px;
+}
+
+.helpTab {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--mc-radius, 4px) var(--mc-radius, 4px) 0 0;
+  color: var(--mc-text-secondary);
+}
+
+.helpTab:hover {
+  background: var(--mc-msg-hover);
+}
+
+.helpTabActive {
+  color: var(--mc-text);
+  border-color: var(--mc-border);
+  border-bottom: 1px solid var(--mc-bg);
+  margin-bottom: -1px;
+  background: var(--mc-bg);
+}
+
+.configSection {
+  font-size: 0.82rem;
+}
+
+.configHeading {
+  margin: 10px 0 4px;
+  font-size: 0.85rem;
+  color: var(--mc-text);
+}
+
+.configHeading:first-child {
+  margin-top: 0;
+}
+
+.configPre {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  margin: 4px 0 0;
+}

@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 
 from connexion.lifecycle import ConnexionResponse
@@ -7,7 +9,7 @@ from database.repository import repo
 from services.auth import (
     auth_provider, create_access_token, create_refresh_token,
     rotate_refresh_token, revoke_all_refresh_tokens, decode_token,
-    _user_role,
+    hash_password, _user_role,
 )
 from services.guard import guard
 from services.utils.request_context import client_ip, authorization_bearer, current_user_id
@@ -23,6 +25,40 @@ def _ratelimited(retry_after: float | None) -> ConnexionResponse | None:
         status_code=429,
         body={"error": f"Too many requests. Try again in {int(retry_after)} seconds."},
     )
+
+
+async def _try_account_recovery(name: str, password: str, passphrase: str) -> ConnexionResponse | None:
+    """Verify a recovery passphrase for an existing user and reset their password.
+
+    Returns a ConnexionResponse on recovery hit (200 on success, 403 on
+    expired/invalid), or None if the user has no pending recovery.
+    """
+    from datetime import datetime, timezone
+
+    existing = await repo.get_user_by_name(name)
+    if not existing or not existing.recovery_hash:
+        return None
+
+    if existing.recovery_expires_at is not None and existing.recovery_expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        return ConnexionResponse(status_code=403, body={"error": "Recovery passphrase expired"})
+
+    provided_hash = hashlib.sha256(passphrase.encode()).hexdigest()
+    if not hmac.compare_digest(provided_hash, existing.recovery_hash):
+        return ConnexionResponse(status_code=403, body={"error": "Invalid recovery passphrase"})
+
+    new_password_hash = hash_password(password)
+    user = await repo.recover_user(existing.id, new_password_hash)
+    if user is None:
+        return ConnexionResponse(status_code=500, body={"error": "Recovery failed"})
+
+    access_token = create_access_token(user.id, user.name, role=_user_role(user))
+    refresh_token = await create_refresh_token(user.id)
+    logger.info(f"Auth recovery: {user.name} ({user.id})")
+    return ConnexionResponse(status_code=200, body={
+        "user": user.to_dict(),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    })
 
 
 async def register(body: dict) -> ConnexionResponse:
@@ -41,7 +77,11 @@ async def register(body: dict) -> ConnexionResponse:
         return ConnexionResponse(status_code=400, body={"error": f"Password must be at least {PASSWORD_MIN_LENGTH} characters"})
     if len(password) > PASSWORD_MAX_LENGTH:
         return ConnexionResponse(status_code=400, body={"error": f"Password too long (max {PASSWORD_MAX_LENGTH} characters)"})
+
     if not guard.verify_passphrase(passphrase):
+        recovery = await _try_account_recovery(name, password, passphrase)
+        if recovery is not None:
+            return recovery
         return ConnexionResponse(status_code=403, body={"error": "Invalid server passphrase"})
 
     user = await auth_provider.register(name, password)

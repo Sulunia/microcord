@@ -151,7 +151,11 @@ export function useUser() {
       body: JSON.stringify({ name, password, passphrase }),
     });
     if (res.status === 409) { setError('Username already taken'); return false; }
-    if (res.status === 403) { setError('Invalid server passphrase'); return false; }
+    if (res.status === 403) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || 'Invalid server passphrase');
+      return false;
+    }
     if (res.status === 429) { setError('Too many attempts. Wait a moment.'); return false; }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

@@ -1,10 +1,20 @@
 import { useState } from 'preact/hooks';
+import { authedFetch } from '../../hooks/use-user.js';
+import { API_BASE } from '../../constants.js';
+import { ServerConfigView } from '../server-config-view.jsx';
 import styles from './sidebar.module.css';
 
-export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, onCloseModal }) {
-  const [activeTab, setActiveTab] = useState('channels');
+export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, onCloseModal, currentUser, users }) {
+  const isOwner = currentUser?.is_owner === true;
+  const [activeTab, setActiveTab] = useState(isOwner ? 'channels' : 'channels');
   const [channelPendingDeletion, setChannelPendingDeletion] = useState(null);
   const [isDeletingChannel, setIsDeletingChannel] = useState(false);
+  const [pendingRecoveryUser, setPendingRecoveryUser] = useState(null);
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveryPassphrase, setRecoveryPassphrase] = useState(null);
+  const [recoveryExpiresAt, setRecoveryExpiresAt] = useState(null);
+  const [recoveryError, setRecoveryError] = useState(null);
+  const [usersList, setUsersList] = useState(users || []);
 
   const handleDeleteClick = (channelId) => {
     setChannelPendingDeletion(channelId);
@@ -20,6 +30,67 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
 
   const handleCancelDelete = () => {
     setChannelPendingDeletion(null);
+  };
+
+  const handleRecoverClick = (user) => {
+    setPendingRecoveryUser(user);
+    setRecoveryError(null);
+  };
+
+  const handleConfirmRecover = async () => {
+    if (isRecovering || !pendingRecoveryUser) return;
+    setIsRecovering(true);
+    setRecoveryError(null);
+    try {
+      const res = await authedFetch(`${API_BASE}/users/${pendingRecoveryUser.id}/recover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setRecoveryError(body.error || 'Recovery failed');
+        setIsRecovering(false);
+        return;
+      }
+      const data = await res.json();
+      setRecoveryPassphrase(data.recovery_passphrase);
+      setRecoveryExpiresAt(data.expires_at);
+      setPendingRecoveryUser(null);
+      setUsersList((prev) =>
+        prev.map((u) =>
+          u.id === pendingRecoveryUser.id
+            ? { ...u, recovery_status: 'pending' }
+            : u
+        )
+      );
+    } catch {
+      setRecoveryError('Network error');
+    }
+    setIsRecovering(false);
+  };
+
+  const handleCancelRecover = () => {
+    setPendingRecoveryUser(null);
+    setRecoveryError(null);
+  };
+
+  const handleDismissPassphrase = () => {
+    setRecoveryPassphrase(null);
+    setRecoveryExpiresAt(null);
+  };
+
+  const handleCopyPassphrase = async () => {
+    if (recoveryPassphrase) {
+      try {
+        await navigator.clipboard.writeText(recoveryPassphrase);
+      } catch {}
+    }
+  };
+
+  const recoveryStatusText = (user) => {
+    if (!user.recovery_status) return null;
+    if (user.recovery_status === 'pending') return { text: 'Recovery pending', className: styles.recoveryStatusPending };
+    return null;
   };
 
   return (
@@ -38,6 +109,20 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
               onClick={() => setActiveTab('channels')}
             >
               Channel Management
+            </button>
+            {isOwner && (
+              <button
+                class={`${styles.setupTab} ${activeTab === 'recovery' ? styles.setupTabActive : ''}`}
+                onClick={() => setActiveTab('recovery')}
+              >
+                Account Recovery
+              </button>
+            )}
+            <button
+              class={`${styles.setupTab} ${activeTab === 'config' ? styles.setupTabActive : ''}`}
+              onClick={() => setActiveTab('config')}
+            >
+              Server Config
             </button>
           </div>
           {activeTab === 'channels' && (
@@ -85,6 +170,87 @@ export function ServerSetupModal({ availableChannels, onRequestDeleteChannel, on
                   </div>
                 );
               })}
+            </div>
+          )}
+          {activeTab === 'recovery' && isOwner && (
+            <div class={styles.recoverySection}>
+              {recoveryPassphrase ? (
+                <div class={styles.recoveryPassphraseDisplay}>
+                  <p class={styles.recoveryWarning}>Recovery passphrase (shown only once):</p>
+                  <div class={styles.recoveryPassphraseBox}>
+                    <code class={styles.recoveryPassphraseCode}>{recoveryPassphrase}</code>
+                    <button class={styles.recoveryCopyBtn} onClick={handleCopyPassphrase} title="Copy to clipboard">
+                      📋
+                    </button>
+                  </div>
+                  {recoveryExpiresAt && (
+                    <p class={styles.recoveryExpiry}>Expires: {new Date(recoveryExpiresAt).toLocaleString()}</p>
+                  )}
+                  {!recoveryExpiresAt && (
+                    <p class={styles.recoveryExpiry}>This passphrase does not expire.</p>
+                  )}
+                  <button onClick={handleDismissPassphrase} style={{ marginTop: '8px' }}>
+                    Dismiss
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {recoveryError && (
+                    <p class={styles.recoveryError}>{recoveryError}</p>
+                  )}
+                  <div class={styles.recoveryUserList}>
+                    {usersList.map((u) => {
+                      const status = recoveryStatusText(u);
+                      const isSelf = u.id === currentUser?.id;
+                      return (
+                        <div key={u.id} class={styles.recoveryUserRow}>
+                          <span class={styles.recoveryUserAvatar}>
+                            {u.avatar_url
+                              ? <img src={u.avatar_url} alt={u.display_name} class={styles.recoveryUserAvatarImg} />
+                              : (u.display_name || '?').charAt(0).toUpperCase()}
+                          </span>
+                          <span class={styles.recoveryUserName}>
+                            {u.display_name}
+                            {isSelf && <span class={styles.recoverySelfBadge}>(you)</span>}
+                            {u.is_owner && <span class={styles.recoveryRoleBadge}>👑</span>}
+                            {!u.is_owner && u.is_admin && <span class={styles.recoveryRoleBadge}>⭐</span>}
+                          </span>
+                          {status && (
+                            <span class={status.className}>{status.text}</span>
+                          )}
+                          {pendingRecoveryUser?.id === u.id ? (
+                            <div class={styles.recoveryConfirmActions}>
+                              <button
+                                class={styles.channelDeleteDanger}
+                                onClick={handleConfirmRecover}
+                                disabled={isRecovering}
+                              >
+                                {isRecovering ? 'Generating…' : 'Confirm'}
+                              </button>
+                              <button onClick={handleCancelRecover} disabled={isRecovering}>
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              class={styles.recoverBtn}
+                              onClick={() => handleRecoverClick(u)}
+                              title={`Recover ${u.display_name}'s account`}
+                            >
+                              Recover
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {activeTab === 'config' && (
+            <div style={{ overflow: 'auto', maxHeight: 'calc(80vh - 140px)' }}>
+              <ServerConfigView />
             </div>
           )}
         </div>
