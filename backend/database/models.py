@@ -108,6 +108,25 @@ class Message(Base):
         return d
 
 
+class VoiceChannel(Base):
+    __tablename__ = "voice_channels"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(24), unique=True, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() + ("Z" if not self.created_at.tzinfo else ""),
+        }
+
+
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
     __table_args__ = (

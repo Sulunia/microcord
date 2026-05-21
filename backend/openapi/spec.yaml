@@ -556,7 +556,7 @@ paths:
   /voice/join:
     post:
       operationId: api.voice.join_voice
-      summary: Join voice channel (user derived from JWT)
+      summary: Join a voice channel (user derived from JWT)
       requestBody:
         required: false
         content:
@@ -598,7 +598,7 @@ paths:
   /voice/participants:
     get:
       operationId: api.voice.get_participants
-      summary: List current voice participants
+      summary: List current voice participants for the caller's channel
       responses:
         "200":
           description: Participant list
@@ -608,6 +608,68 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/VoiceParticipant"
+
+  /voice-channels:
+    get:
+      operationId: api.voice_channels.list_voice_channels
+      summary: List all voice channels with participant counts
+      responses:
+        "200":
+          description: Voice channel list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VoiceChannel"
+
+    post:
+      operationId: api.voice_channels.create_voice_channel
+      summary: Create a voice channel (admin/owner only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVoiceChannelRequest"
+      responses:
+        "201":
+          description: Voice channel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceChannel"
+        "400":
+          description: Validation error or max channels reached
+        "403":
+          description: Admin/owner access required
+        "409":
+          description: Voice channel name already exists
+
+  /voice-channels/{channel_id}:
+    delete:
+      operationId: api.voice_channels.delete_voice_channel
+      summary: Delete a voice channel (admin/owner only, cannot delete last)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Voice channel deleted
+        "400":
+          description: Cannot delete last voice channel
+        "403":
+          description: Admin/owner access required
+        "404":
+          description: Voice channel not found
 
 components:
   securitySchemes:
@@ -808,6 +870,10 @@ components:
             The WebSocket connection_id of the session joining voice.
             Optional — if omitted the join still succeeds but the server
             cannot enforce the single-voice-session-per-user constraint.
+        channel_id:
+          type: string
+          format: uuid
+          description: Voice channel to join. Defaults to the first available channel.
 
     VoiceJoinResponse:
       type: object
@@ -834,6 +900,37 @@ components:
           format: uuid
         name:
           type: string
+        channel_id:
+          type: string
+          format: uuid
+          description: The voice channel this participant is in
+
+    VoiceChannel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        participant_count:
+          type: integer
+
+    CreateVoiceChannelRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 24
 
     UiConfig:
       type: object
