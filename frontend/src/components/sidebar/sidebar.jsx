@@ -3,6 +3,34 @@ import { UI_CONFIG, VOICE_STATE } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
 
+function groupParticipantsByChannel(participants, voiceChannels, activeChannelId) {
+  const channelMap = new Map();
+  const nameMap = new Map();
+  for (const vc of (voiceChannels || [])) {
+    channelMap.set(vc.id, []);
+    nameMap.set(vc.id, vc.name);
+  }
+  for (const p of participants) {
+    const cid = p.channel_id;
+    if (!channelMap.has(cid)) {
+      channelMap.set(cid, []);
+      nameMap.set(cid, cid);
+    }
+    channelMap.get(cid).push(p);
+  }
+  const groups = [];
+  for (const [cid, parts] of channelMap) {
+    if (parts.length === 0) continue;
+    groups.push({ id: cid, name: nameMap.get(cid), participants: parts });
+  }
+  groups.sort((a, b) => {
+    if (a.id === activeChannelId) return -1;
+    if (b.id === activeChannelId) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return groups;
+}
+
 function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch, onWatch, isNew }) {
   const initial = name.charAt(0).toUpperCase();
   return (
@@ -113,28 +141,35 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
           </div>
         )}
 
-        <ul class={styles.participantList}>
-          {participants.map((p) => {
-            const pid = p.user_id || p.id;
-            const isSharer = pid === sharerUserId;
-            const isMe = pid === user?.id;
-            const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
-            const participantMuted = Boolean(p.muted);
-            return (
-              <Participant
-                key={pid}
-                name={p.name}
-                avatarUrl={p.avatar_url}
-                isSpeaking={speakingUsers.get(pid) ?? Boolean(p.speaking)}
-                isSharer={isSharer}
-                isMuted={participantMuted}
-                canWatch={canWatch}
-                onWatch={screenshare?.requestStream}
-                isNew={newIds.has(pid)}
-              />
-            );
-          })}
-        </ul>
+        {participants.length > 0 && (
+          <ul class={styles.participantList}>
+            {groupParticipantsByChannel(participants, voiceChannels, activeChannelId).map((group) => (
+              <>
+                <li class={styles.channelGroupHeader}>🔊 {group.name}</li>
+                {group.participants.map((p) => {
+                  const pid = p.user_id || p.id;
+                  const isSharer = pid === sharerUserId;
+                  const isMe = pid === user?.id;
+                  const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
+                  const participantMuted = Boolean(p.muted);
+                  return (
+                    <Participant
+                      key={pid}
+                      name={p.name}
+                      avatarUrl={p.avatar_url}
+                      isSpeaking={speakingUsers.get(pid) ?? Boolean(p.speaking)}
+                      isSharer={isSharer}
+                      isMuted={participantMuted}
+                      canWatch={canWatch}
+                      onWatch={screenshare?.requestStream}
+                      isNew={newIds.has(pid)}
+                    />
+                  );
+                })}
+              </>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div class={styles.controls}>

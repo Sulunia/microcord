@@ -151,7 +151,7 @@ async def get_participants() -> list[dict]:
     user_id = jwt_user.get("id")
     if not user_id:
         return []
-    channel_id = voice_room_manager.user_channel(user_id)
-    if not channel_id:
-        return []
-    return await _resolve_participants(channel_id)
+    all_participants: list[dict] = []
+    for channel_id in voice_room_manager.all_room_ids():
+        all_participants.extend(await _resolve_participants(channel_id))
+    return all_participants

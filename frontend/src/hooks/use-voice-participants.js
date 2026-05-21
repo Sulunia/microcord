@@ -45,9 +45,7 @@ export function useVoiceParticipants({ joinStateRef, userId, connectionId, onPar
                 if (isOtherConnectionJoining) {
                     setJoinedElsewhere(true);
                 }
-                if (!data?.channel_id || !joinStateRef.current || joinStateRef.current === VOICE_STATE.JOINED) {
-                    fetchParticipants();
-                }
+                fetchParticipants();
             }),
             subscribe('voice_participant_left', (data) => {
                 if (joinStateRef.current === VOICE_STATE.JOINED) {
@@ -57,9 +55,7 @@ export function useVoiceParticipants({ joinStateRef, userId, connectionId, onPar
                     setJoinedElsewhere(false);
                 }
                 onParticipantLeft(data.user_id);
-                if (!data?.channel_id || !joinStateRef.current || joinStateRef.current === VOICE_STATE.JOINED) {
-                    fetchParticipants();
-                }
+                fetchParticipants();
             }),
             subscribe('voice_signal', (data) => {
                 if (joinStateRef.current === VOICE_STATE.JOINED) {

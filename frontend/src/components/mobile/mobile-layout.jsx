@@ -15,8 +15,37 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
+function groupParticipantsByChannel(participants, voiceChannels, activeChannelId) {
+  const channelMap = new Map();
+  const nameMap = new Map();
+  for (const vc of (voiceChannels || [])) {
+    channelMap.set(vc.id, []);
+    nameMap.set(vc.id, vc.name);
+  }
+  for (const p of participants) {
+    const cid = p.channel_id;
+    if (!channelMap.has(cid)) {
+      channelMap.set(cid, []);
+      nameMap.set(cid, cid);
+    }
+    channelMap.get(cid).push(p);
+  }
+  const groups = [];
+  for (const [cid, parts] of channelMap) {
+    if (parts.length === 0) continue;
+    groups.push({ id: cid, name: nameMap.get(cid), participants: parts });
+  }
+  groups.sort((a, b) => {
+    if (a.id === activeChannelId) return -1;
+    if (b.id === activeChannelId) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return groups;
+}
+
 function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel }) {
   const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
+  const activeChannelId = voice.activeChannelId;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -53,33 +82,40 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
           <span>🔊</span>
           <span>{UI_CONFIG.voiceChannelName}</span>
         </div>
-        <ul class={styles.voiceParticipantList}>
-          {participants.map((p) => {
-            const pid = p.user_id || p.id;
-            const isSharer = pid === sharerUserId;
-            const isMe = pid === user?.id;
-            const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
-            const pInitial = p.name.charAt(0).toUpperCase();
-            const participantMuted = Boolean(p.muted);
-            return (
-              <li class={`${styles.participant} ${(speakingUsers.get(pid) ?? Boolean(p.speaking)) ? styles.speaking : ''}`}>
-                <span class={styles.participantAvatar}>
-                  {p.avatar_url
-                    ? <img src={p.avatar_url} alt={p.name} class={styles.participantAvatarImg} />
-                    : pInitial}
-                </span>
-                <span class={styles.participantName}>
-                  {p.name}
-                  {isSharer && <span class={styles.sharingBadge}>sharing</span>}
-                </span>
-                {participantMuted && <span class={styles.mutedIcon} title="Muted">🔇</span>}
-                {canWatch && (
-                  <button class={styles.watchBtn} onClick={screenshare?.requestStream} title="Watch stream">▶</button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        {participants.length > 0 && (
+          <ul class={styles.voiceParticipantList}>
+            {groupParticipantsByChannel(participants, voiceChannels, activeChannelId).map((group) => (
+              <>
+                <li class={styles.channelGroupHeader}>🔊 {group.name}</li>
+                {group.participants.map((p) => {
+                  const pid = p.user_id || p.id;
+                  const isSharer = pid === sharerUserId;
+                  const isMe = pid === user?.id;
+                  const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
+                  const pInitial = p.name.charAt(0).toUpperCase();
+                  const participantMuted = Boolean(p.muted);
+                  return (
+                    <li class={`${styles.participant} ${(speakingUsers.get(pid) ?? Boolean(p.speaking)) ? styles.speaking : ''}`}>
+                      <span class={styles.participantAvatar}>
+                        {p.avatar_url
+                          ? <img src={p.avatar_url} alt={p.name} class={styles.participantAvatarImg} />
+                          : pInitial}
+                      </span>
+                      <span class={styles.participantName}>
+                        {p.name}
+                        {isSharer && <span class={styles.sharingBadge}>sharing</span>}
+                      </span>
+                      {participantMuted && <span class={styles.mutedIcon} title="Muted">🔇</span>}
+                      {canWatch && (
+                        <button class={styles.watchBtn} onClick={screenshare?.requestStream} title="Watch stream">▶</button>
+                      )}
+                    </li>
+                  );
+                })}
+              </>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div class={styles.voiceControls}>

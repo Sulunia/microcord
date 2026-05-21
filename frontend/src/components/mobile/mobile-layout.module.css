@@ -116,6 +116,19 @@
   letter-spacing: 0.3px;
 }
 
+.channelGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--mc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  user-select: none;
+}
+
 .voiceParticipantList {
   list-style: none;
   padding: 4px 6px;
