@@ -1,34 +1,27 @@
-import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'preact/hooks';
 import { UI_CONFIG, VOICE_STATE } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
 
-function groupParticipantsByChannel(participants, voiceChannels, activeChannelId) {
-  const channelMap = new Map();
-  const nameMap = new Map();
-  for (const vc of (voiceChannels || [])) {
-    channelMap.set(vc.id, []);
-    nameMap.set(vc.id, vc.name);
-  }
+/**
+ * Build a TS2-style list: ALL voice channels in creation order,
+ * each with its participants nested underneath. Channels with no
+ * participants still appear (empty room).
+ */
+function buildChannelTree(voiceChannels, participants, activeChannelId) {
+  const partsByChannel = new Map();
   for (const p of participants) {
     const cid = p.channel_id;
-    if (!channelMap.has(cid)) {
-      channelMap.set(cid, []);
-      nameMap.set(cid, cid);
-    }
-    channelMap.get(cid).push(p);
+    if (!partsByChannel.has(cid)) partsByChannel.set(cid, []);
+    partsByChannel.get(cid).push(p);
   }
-  const groups = [];
-  for (const [cid, parts] of channelMap) {
-    if (parts.length === 0) continue;
-    groups.push({ id: cid, name: nameMap.get(cid), participants: parts });
-  }
-  groups.sort((a, b) => {
-    if (a.id === activeChannelId) return -1;
-    if (b.id === activeChannelId) return 1;
-    return a.name.localeCompare(b.name);
-  });
-  return groups;
+  // voiceChannels is already in creation order from the API
+  return (voiceChannels || []).map((vc) => ({
+    id: vc.id,
+    name: vc.name,
+    participants: partsByChannel.get(vc.id) || [],
+    isActive: vc.id === activeChannelId,
+  }));
 }
 
 function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch, onWatch, isNew }) {
@@ -115,6 +108,11 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
     }
   }, [isJoined, activeChannelId, joinChannel, leave]);
 
+  const channelTree = useMemo(
+    () => buildChannelTree(voiceChannels, participants, activeChannelId),
+    [voiceChannels, participants, activeChannelId],
+  );
+
   return (
     <aside class={styles.sidebar} style={style}>
       <div class={`${styles.channel} has-scrollbar`}>
@@ -124,29 +122,18 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
         </div>
 
         {voiceChannels && voiceChannels.length > 0 && (
-          <div class={styles.voiceChannelList}>
-            {voiceChannels.map((vc) => {
-              const isActive = vc.id === activeChannelId;
-              return (
-                <div
-                  key={vc.id}
-                  class={`${styles.voiceChannelItem} ${isActive ? styles.voiceChannelActive : ''}`}
-                  onClick={() => handleVoiceChannelClick(vc.id)}
-                >
-                  <span>🔊 {vc.name}</span>
-                  <span class={styles.voiceChannelCount}>{vc.participant_count || 0}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {participants.length > 0 && (
           <ul class={styles.participantList}>
-            {groupParticipantsByChannel(participants, voiceChannels, activeChannelId).map((group) => (
+            {channelTree.map((ch) => (
               <>
-                <li class={styles.channelGroupHeader}>🔊 {group.name}</li>
-                {group.participants.map((p) => {
+                <li
+                  class={`${styles.channelGroupHeader} ${ch.isActive ? styles.voiceChannelActive : ''}`}
+                  onClick={() => handleVoiceChannelClick(ch.id)}
+                >
+                  <span class={styles.channelGroupIcon}>🔊</span>
+                  <span class={styles.channelGroupName}>{ch.name}</span>
+                  <span class={styles.voiceChannelCount}>{ch.participants.length}</span>
+                </li>
+                {ch.participants.map((p) => {
                   const pid = p.user_id || p.id;
                   const isSharer = pid === sharerUserId;
                   const isMe = pid === user?.id;

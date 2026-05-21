@@ -15,37 +15,23 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
-function groupParticipantsByChannel(participants, voiceChannels, activeChannelId) {
-  const channelMap = new Map();
-  const nameMap = new Map();
-  for (const vc of (voiceChannels || [])) {
-    channelMap.set(vc.id, []);
-    nameMap.set(vc.id, vc.name);
-  }
+function buildChannelTree(voiceChannels, participants, activeChannelId) {
+  const partsByChannel = new Map();
   for (const p of participants) {
     const cid = p.channel_id;
-    if (!channelMap.has(cid)) {
-      channelMap.set(cid, []);
-      nameMap.set(cid, cid);
-    }
-    channelMap.get(cid).push(p);
+    if (!partsByChannel.has(cid)) partsByChannel.set(cid, []);
+    partsByChannel.get(cid).push(p);
   }
-  const groups = [];
-  for (const [cid, parts] of channelMap) {
-    if (parts.length === 0) continue;
-    groups.push({ id: cid, name: nameMap.get(cid), participants: parts });
-  }
-  groups.sort((a, b) => {
-    if (a.id === activeChannelId) return -1;
-    if (b.id === activeChannelId) return 1;
-    return a.name.localeCompare(b.name);
-  });
-  return groups;
+  return (voiceChannels || []).map((vc) => ({
+    id: vc.id,
+    name: vc.name,
+    participants: partsByChannel.get(vc.id) || [],
+    isActive: vc.id === activeChannelId,
+  }));
 }
 
 function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
-  const activeChannelId = voice.activeChannelId;
+  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere, activeChannelId, joinChannel } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -75,6 +61,21 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
           ? 'Disconnect'
           : 'Join Voice';
 
+  const handleVoiceChannelClick = useCallback((channelId) => {
+    if (!isJoined) {
+      if (joinChannel) joinChannel(channelId);
+    } else if (activeChannelId !== channelId) {
+      leave().then(() => {
+        if (joinChannel) joinChannel(channelId);
+      });
+    }
+  }, [isJoined, activeChannelId, joinChannel, leave]);
+
+  const channelTree = useMemo(
+    () => buildChannelTree(voiceChannels, participants, activeChannelId),
+    [voiceChannels, participants, activeChannelId],
+  );
+
   return (
     <div class={styles.voiceView}>
       <div class={`${styles.voiceChannel} has-scrollbar`}>
@@ -82,12 +83,19 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
           <span>🔊</span>
           <span>{UI_CONFIG.voiceChannelName}</span>
         </div>
-        {participants.length > 0 && (
+        {voiceChannels && voiceChannels.length > 0 && (
           <ul class={styles.voiceParticipantList}>
-            {groupParticipantsByChannel(participants, voiceChannels, activeChannelId).map((group) => (
+            {channelTree.map((ch) => (
               <>
-                <li class={styles.channelGroupHeader}>🔊 {group.name}</li>
-                {group.participants.map((p) => {
+                <li
+                  class={`${styles.channelGroupHeader} ${ch.isActive ? styles.voiceChannelActive : ''}`}
+                  onClick={() => handleVoiceChannelClick(ch.id)}
+                >
+                  <span class={styles.channelGroupIcon}>🔊</span>
+                  <span class={styles.channelGroupName}>{ch.name}</span>
+                  <span class={styles.voiceChannelCount}>{ch.participants.length}</span>
+                </li>
+                {ch.participants.map((p) => {
                   const pid = p.user_id || p.id;
                   const isSharer = pid === sharerUserId;
                   const isMe = pid === user?.id;

@@ -88,13 +88,30 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px 2px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--mc-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.2px;
+  padding: 4px 6px;
+  font-size: 0.78rem;
+  color: var(--mc-text-secondary);
+  cursor: pointer;
+  border-radius: var(--mc-radius);
+  transition: background 0.12s;
   user-select: none;
+}
+
+.channelGroupHeader:hover {
+  background: var(--mc-msg-hover);
+}
+
+.channelGroupIcon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.channelGroupName {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
 }
 
 .participantList {
