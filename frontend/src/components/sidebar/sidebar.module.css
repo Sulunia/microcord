@@ -127,7 +127,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 6px;
+  padding: 4px 6px 4px 14px;
   border-radius: var(--mc-radius);
   transition: background 0.12s;
 }
