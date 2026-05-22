@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'preact/hooks'
 import { Message } from './message.jsx';
 import { MessageInput } from './message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
+import { LoadingSpinner } from '../shared/loading-spinner.jsx';
 import { SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, DEFAULT_VIDEO_RATIO, MIN_VIDEO_RATIO, MAX_VIDEO_RATIO, MAX_CHANNEL_NAME_LENGTH } from '../../constants.js';
 import styles from './chat-panel.module.css';
 
@@ -258,9 +259,7 @@ export function ChatPanel({ chat, screenshare, currentUser, showMembers, onToggl
         <div class={`${styles.messageList} has-scrollbar`} ref={listRef} onScroll={onScroll}>
           <div ref={contentRef} class={styles.messageContent}>
             {loading && messages.length === 0 ? (
-              <div class={styles.loading}>
-                <progress />
-              </div>
+              <LoadingSpinner />
             ) : renderedMessages}
             <div ref={bottomRef} />
           </div>

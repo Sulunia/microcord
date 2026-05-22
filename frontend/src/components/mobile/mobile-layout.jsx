@@ -3,6 +3,7 @@ import { Message } from '../chat/message.jsx';
 import { MessageInput } from '../chat/message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
 import { UserProfileModal } from '../sidebar/user-profile-modal.jsx';
+import { LoadingSpinner } from '../shared/loading-spinner.jsx';
 import { UI_CONFIG, VOICE_STATE, SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, MAX_CHANNEL_NAME_LENGTH } from '../../constants.js';
 import styles from './mobile-layout.module.css';
 
@@ -439,9 +440,7 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
       <div class={`${styles.messageList} has-scrollbar`} ref={listRef} onScroll={onScroll}>
         <div ref={contentRef} class={styles.messageContent}>
           {loading && messages.length === 0 ? (
-            <div class={styles.loading}>
-              <progress />
-            </div>
+            <LoadingSpinner />
           ) : renderedMessages}
           <div ref={bottomRef} />
         </div>
