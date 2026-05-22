@@ -102,8 +102,12 @@
 }
 
 .channelGroupIcon {
-  font-size: 0.85rem;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
+  color: var(--mc-text-muted);
+  display: flex;
+  align-items: center;
 }
 
 .channelGroupName {
