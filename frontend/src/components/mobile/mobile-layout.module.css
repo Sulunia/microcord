@@ -491,79 +491,86 @@
   background: var(--mc-msg-hover);
 }
 
-.channelPicker {
-  flex-shrink: 0;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--mc-border);
-}
-
-.channelPickerBtn {
+.channelStrip {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--mc-text);
-  background: none;
-  border: none;
-  cursor: pointer;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  flex-shrink: 0;
   padding: 4px 6px;
-  border-radius: var(--mc-radius);
-}
-
-.channelPickerBtn:hover {
-  background: var(--mc-msg-hover);
-}
-
-.channelPickerArrow {
-  font-size: 0.6rem;
-  color: var(--mc-text-muted);
-}
-
-.channelDropdown {
-  position: relative;
-  background: var(--mc-bg);
+  gap: 2px;
   border-bottom: 1px solid var(--mc-border);
-  padding: 4px 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.channelStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.channelTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--mc-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--mc-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.channelTab:hover {
+  background: var(--mc-msg-hover);
+  color: var(--mc-text);
+}
+
+.channelTabActive {
+  color: var(--mc-text);
+  font-weight: 600;
+  background: var(--mc-bg-alt);
+  border-color: var(--mc-accent);
+}
+
+.channelTabHash {
+  color: var(--mc-text-muted);
+  font-weight: 400;
+  font-size: 0.7rem;
+}
+
+.channelTabName {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channelTabActive .channelTabHash {
+  color: var(--mc-accent);
+}
+
+.channelTabAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--mc-text-muted);
+  background: none;
+  border: 1px dashed var(--mc-border);
+  border-radius: var(--mc-radius);
+  cursor: pointer;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
-.channelDropdownItem {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 6px 12px;
-  font-size: 0.82rem;
-  cursor: pointer;
-  background: none;
-  border: none;
+.channelTabAdd:hover {
   color: var(--mc-text);
-}
-
-.channelDropdownItem:hover {
-  background: var(--mc-msg-hover);
-}
-
-.channelDropdownItemActive {
-  color: var(--mc-accent);
-  font-weight: 600;
-}
-
-.channelDropdownAdd {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 6px 12px;
-  font-size: 0.82rem;
-  cursor: pointer;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--mc-border);
-  color: var(--mc-accent);
-  margin-top: 4px;
-}
-
-.channelDropdownAdd:hover {
+  border-color: var(--mc-accent);
   background: var(--mc-msg-hover);
 }
 

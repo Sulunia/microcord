@@ -278,17 +278,24 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
 function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   const { messages, sendMessage, deleteMessage, loadOlder, hasMore, loading } = chat;
   const { channels, activeChannelId, setActiveChannelId: onSelectChannel, createChannel: onCreateChannel, renameChannel: onRenameChannel, deleteChannel: onDeleteChannel, unreadCounts } = channelsState || {};
-  const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState('');
   const [modalError, setModalError] = useState(null);
   const createInputRef = useRef(null);
+  const channelStripRef = useRef(null);
   const isAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
   const activeChannelName = channels?.find((c) => c.id === activeChannelId)?.name || 'general';
 
   useEffect(() => {
     if (showCreateModal && createInputRef.current) createInputRef.current.focus();
   }, [showCreateModal]);
+
+  // Scroll active channel tab into view
+  useEffect(() => {
+    if (!channelStripRef.current) return;
+    const active = channelStripRef.current.querySelector('[data-active="true"]');
+    if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeChannelId]);
 
   const handleCreate = async () => {
     setModalError(null);
@@ -301,7 +308,6 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
     if (result) {
       setShowCreateModal(false);
       setModalName('');
-      setShowChannelPicker(false);
     }
   };
   const listRef = useRef(null);
@@ -402,31 +408,23 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
 
   return (
     <div class={styles.chatView}>
-      <div class={styles.channelPicker}>
-        <button class={styles.channelPickerBtn} onClick={() => setShowChannelPicker(!showChannelPicker)}>
-          <span>#</span> {activeChannelName}
-          <span class={styles.channelPickerArrow}>{showChannelPicker ? '▲' : '▼'}</span>
-        </button>
+      <div class={styles.channelStrip} ref={channelStripRef}>
+        {(channels || []).map((ch) => (
+          <button
+            key={ch.id}
+            data-active={ch.id === activeChannelId ? 'true' : undefined}
+            class={`${styles.channelTab} ${ch.id === activeChannelId ? styles.channelTabActive : ''}`}
+            onClick={() => onSelectChannel(ch.id)}
+          >
+            <span class={styles.channelTabHash}>#</span>
+            <span class={styles.channelTabName}>{ch.name}</span>
+            {unreadCounts?.[ch.id] ? <span class={styles.unreadBadge}>{unreadCounts[ch.id]}</span> : null}
+          </button>
+        ))}
+        {isAdmin && (
+          <button class={styles.channelTabAdd} onClick={() => { setShowCreateModal(true); setModalName(''); setModalError(null); }}>+</button>
+        )}
       </div>
-      {showChannelPicker && (
-        <div class={styles.channelDropdown}>
-          {(channels || []).map((ch) => (
-            <button
-              key={ch.id}
-              class={`${styles.channelDropdownItem} ${ch.id === activeChannelId ? styles.channelDropdownItemActive : ''}`}
-              onClick={() => { onSelectChannel(ch.id); setShowChannelPicker(false); }}
-            >
-              # {ch.name}
-              {unreadCounts?.[ch.id] ? <span class={styles.unreadBadge}>{unreadCounts[ch.id]}</span> : null}
-            </button>
-          ))}
-          {isAdmin && (
-            <button class={styles.channelDropdownAdd} onClick={() => { setShowCreateModal(true); setModalName(''); setModalError(null); }}>
-              + Create Channel
-            </button>
-          )}
-        </div>
-      )}
       {hasScreenshare && (
         <div class={styles.videoSection}>
           <ScreenshareView
