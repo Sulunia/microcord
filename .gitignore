@@ -6,3 +6,6 @@ __pycache__/
 *$py.class
 .env
 .testvenv/
+.coverage
+htmlcov/
+frontend/dist/

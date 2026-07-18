@@ -10,7 +10,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.routing import WebSocketRoute, Mount
 
-from constants import UPLOAD_DIR, CORS_ORIGIN, AUTH_PROVIDER
+from constants import UPLOAD_DIR, CORS_ORIGIN, AUTH_PROVIDER, DEFAULT_VOICE_CHANNEL_NAME
 from database.repository import repo
 from services.auth import AuthMiddleware, refresh_token_prune_loop
 from services.guard import guard
@@ -35,6 +35,7 @@ FRONTEND_DIR = Path("static/frontend")
 async def lifespan(_app):
     await repo.init()
     repo.start_writer()
+    await repo.migrate_default_voice_channel(DEFAULT_VOICE_CHANNEL_NAME)
     media_manager.start()
     guard.log_passphrase()
     prune_task = asyncio.ensure_future(refresh_token_prune_loop())

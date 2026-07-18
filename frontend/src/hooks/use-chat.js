@@ -39,6 +39,7 @@ export function useChat(user, setUser, activeChannelId) {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
+    if (!cursor) setMessages([]);
     try {
       const params = new URLSearchParams({ limit: String(CHAT_PAGE_SIZE) });
       if (cursor) params.set('cursor', cursor);

@@ -3,6 +3,7 @@ import { Message } from '../chat/message.jsx';
 import { MessageInput } from '../chat/message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
 import { UserProfileModal } from '../sidebar/user-profile-modal.jsx';
+import { LoadingSpinner } from '../shared/loading-spinner.jsx';
 import { UI_CONFIG, VOICE_STATE, SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, MAX_CHANNEL_NAME_LENGTH } from '../../constants.js';
 import styles from './mobile-layout.module.css';
 
@@ -15,8 +16,23 @@ function getTimestamp(msg) {
   return msg.timestamp || 0;
 }
 
-function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
+function buildChannelTree(voiceChannels, participants, activeChannelId) {
+  const partsByChannel = new Map();
+  for (const p of participants) {
+    const cid = p.channel_id;
+    if (!partsByChannel.has(cid)) partsByChannel.set(cid, []);
+    partsByChannel.get(cid).push(p);
+  }
+  return (voiceChannels || []).map((vc) => ({
+    id: vc.id,
+    name: vc.name,
+    participants: partsByChannel.get(vc.id) || [],
+    isActive: vc.id === activeChannelId,
+  }));
+}
+
+function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel }) {
+  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere, activeChannelId, joinChannel } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -46,6 +62,21 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
           ? 'Disconnect'
           : 'Join Voice';
 
+  const handleVoiceChannelClick = useCallback((channelId) => {
+    if (!isJoined) {
+      if (joinChannel) joinChannel(channelId);
+    } else if (activeChannelId !== channelId) {
+      leave().then(() => {
+        if (joinChannel) joinChannel(channelId);
+      });
+    }
+  }, [isJoined, activeChannelId, joinChannel, leave]);
+
+  const channelTree = useMemo(
+    () => buildChannelTree(voiceChannels, participants, activeChannelId),
+    [voiceChannels, participants, activeChannelId],
+  );
+
   return (
     <div class={styles.voiceView}>
       <div class={`${styles.voiceChannel} has-scrollbar`}>
@@ -53,33 +84,53 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
           <span>🔊</span>
           <span>{UI_CONFIG.voiceChannelName}</span>
         </div>
-        <ul class={styles.voiceParticipantList}>
-          {participants.map((p) => {
-            const pid = p.user_id || p.id;
-            const isSharer = pid === sharerUserId;
-            const isMe = pid === user?.id;
-            const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
-            const pInitial = p.name.charAt(0).toUpperCase();
-            const participantMuted = Boolean(p.muted);
-            return (
-              <li class={`${styles.participant} ${(speakingUsers.get(pid) ?? Boolean(p.speaking)) ? styles.speaking : ''}`}>
-                <span class={styles.participantAvatar}>
-                  {p.avatar_url
-                    ? <img src={p.avatar_url} alt={p.name} class={styles.participantAvatarImg} />
-                    : pInitial}
-                </span>
-                <span class={styles.participantName}>
-                  {p.name}
-                  {isSharer && <span class={styles.sharingBadge}>sharing</span>}
-                </span>
-                {participantMuted && <span class={styles.mutedIcon} title="Muted">🔇</span>}
-                {canWatch && (
-                  <button class={styles.watchBtn} onClick={screenshare?.requestStream} title="Watch stream">▶</button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        {voiceChannels && voiceChannels.length > 0 && (
+          <ul class={styles.voiceParticipantList}>
+            {channelTree.map((ch) => (
+              <>
+                <li
+                  class={`${styles.channelGroupHeader} ${ch.isActive ? styles.voiceChannelActive : ''}`}
+                  onClick={() => handleVoiceChannelClick(ch.id)}
+                >
+                  <span class={styles.channelGroupIcon}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  </span>
+                  <span class={styles.channelGroupName}>{ch.name}</span>
+                  <span class={styles.voiceChannelCount}>{ch.participants.length}</span>
+                </li>
+                {ch.participants.map((p) => {
+                  const pid = p.user_id || p.id;
+                  const isSharer = pid === sharerUserId;
+                  const isMe = pid === user?.id;
+                  const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
+                  const pInitial = p.name.charAt(0).toUpperCase();
+                  const participantMuted = Boolean(p.muted);
+                  return (
+                    <li class={`${styles.participant} ${(speakingUsers.get(pid) ?? Boolean(p.speaking)) ? styles.speaking : ''}`}>
+                      <span class={styles.participantAvatar}>
+                        {p.avatar_url
+                          ? <img src={p.avatar_url} alt={p.name} class={styles.participantAvatarImg} />
+                          : pInitial}
+                      </span>
+                      <span class={styles.participantName}>
+                        {p.name}
+                        {isSharer && <span class={styles.sharingBadge}>sharing</span>}
+                      </span>
+                      {participantMuted && <span class={styles.mutedIcon} title="Muted">🔇</span>}
+                      {canWatch && (
+                        <button class={styles.watchBtn} onClick={screenshare?.requestStream} title="Watch stream">▶</button>
+                      )}
+                    </li>
+                  );
+                })}
+              </>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div class={styles.voiceControls}>
@@ -140,6 +191,9 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
         channels={channels}
         onDeleteChannel={onDeleteChannel}
         usersMap={usersMap}
+        voiceChannels={voiceChannels}
+        onCreateVoiceChannel={onCreateVoiceChannel}
+        onDeleteVoiceChannel={onDeleteVoiceChannel}
       />
     </div>
   );
@@ -224,17 +278,24 @@ function MobileUsersTab({ usersMap, onlineUserIds, currentUser, setUserAdmin }) 
 function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   const { messages, sendMessage, deleteMessage, loadOlder, hasMore, loading } = chat;
   const { channels, activeChannelId, setActiveChannelId: onSelectChannel, createChannel: onCreateChannel, renameChannel: onRenameChannel, deleteChannel: onDeleteChannel, unreadCounts } = channelsState || {};
-  const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalName, setModalName] = useState('');
   const [modalError, setModalError] = useState(null);
   const createInputRef = useRef(null);
+  const channelStripRef = useRef(null);
   const isAdmin = Boolean(currentUser?.is_admin || currentUser?.is_owner);
   const activeChannelName = channels?.find((c) => c.id === activeChannelId)?.name || 'general';
 
   useEffect(() => {
     if (showCreateModal && createInputRef.current) createInputRef.current.focus();
   }, [showCreateModal]);
+
+  // Scroll active channel tab into view
+  useEffect(() => {
+    if (!channelStripRef.current) return;
+    const active = channelStripRef.current.querySelector('[data-active="true"]');
+    if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeChannelId]);
 
   const handleCreate = async () => {
     setModalError(null);
@@ -247,7 +308,6 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
     if (result) {
       setShowCreateModal(false);
       setModalName('');
-      setShowChannelPicker(false);
     }
   };
   const listRef = useRef(null);
@@ -348,31 +408,23 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
 
   return (
     <div class={styles.chatView}>
-      <div class={styles.channelPicker}>
-        <button class={styles.channelPickerBtn} onClick={() => setShowChannelPicker(!showChannelPicker)}>
-          <span>#</span> {activeChannelName}
-          <span class={styles.channelPickerArrow}>{showChannelPicker ? '▲' : '▼'}</span>
-        </button>
+      <div class={styles.channelStrip} ref={channelStripRef}>
+        {(channels || []).map((ch) => (
+          <button
+            key={ch.id}
+            data-active={ch.id === activeChannelId ? 'true' : undefined}
+            class={`${styles.channelTab} ${ch.id === activeChannelId ? styles.channelTabActive : ''}`}
+            onClick={() => onSelectChannel(ch.id)}
+          >
+            <span class={styles.channelTabHash}>#</span>
+            <span class={styles.channelTabName}>{ch.name}</span>
+            {unreadCounts?.[ch.id] ? <span class={styles.unreadBadge}>{unreadCounts[ch.id]}</span> : null}
+          </button>
+        ))}
+        {isAdmin && (
+          <button class={styles.channelTabAdd} onClick={() => { setShowCreateModal(true); setModalName(''); setModalError(null); }}>+</button>
+        )}
       </div>
-      {showChannelPicker && (
-        <div class={styles.channelDropdown}>
-          {(channels || []).map((ch) => (
-            <button
-              key={ch.id}
-              class={`${styles.channelDropdownItem} ${ch.id === activeChannelId ? styles.channelDropdownItemActive : ''}`}
-              onClick={() => { onSelectChannel(ch.id); setShowChannelPicker(false); }}
-            >
-              # {ch.name}
-              {unreadCounts?.[ch.id] ? <span class={styles.unreadBadge}>{unreadCounts[ch.id]}</span> : null}
-            </button>
-          ))}
-          {isAdmin && (
-            <button class={styles.channelDropdownAdd} onClick={() => { setShowCreateModal(true); setModalName(''); setModalError(null); }}>
-              + Create Channel
-            </button>
-          )}
-        </div>
-      )}
       {hasScreenshare && (
         <div class={styles.videoSection}>
           <ScreenshareView
@@ -386,9 +438,7 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
       <div class={`${styles.messageList} has-scrollbar`} ref={listRef} onScroll={onScroll}>
         <div ref={contentRef} class={styles.messageContent}>
           {loading && messages.length === 0 ? (
-            <div class={styles.loading}>
-              <progress />
-            </div>
+            <LoadingSpinner />
           ) : renderedMessages}
           <div ref={bottomRef} />
         </div>
@@ -428,7 +478,7 @@ function MobileChatTab({ chat, screenshare, currentUser, channelsState }) {
   );
 }
 
-export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channelsState }) {
+export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channelsState, voiceChannelsState }) {
   const [activeTab, setActiveTab] = useState('chat');
 
   const voiceCount = voice.participants.length;
@@ -470,6 +520,9 @@ export function MobileLayout({ chat, voice, screenshare, user, onUpdateProfile, 
             channels={channelsState.channels}
             onDeleteChannel={channelsState.deleteChannel}
             usersMap={chat.usersMap}
+            voiceChannels={voiceChannelsState?.voiceChannels}
+            onCreateVoiceChannel={voiceChannelsState?.createVoiceChannel}
+            onDeleteVoiceChannel={voiceChannelsState?.deleteVoiceChannel}
           />
         )}
         {activeTab === 'users' && (

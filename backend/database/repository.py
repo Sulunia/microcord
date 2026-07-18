@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from constants import DB_URL, DEFAULT_CHANNEL_NAME
 from database.models import (
-    Base, User, Message, RefreshToken, Channel,
+    Base, User, Message, RefreshToken, Channel, VoiceChannel,
     _enable_wal, _migrate_columns, _migrate_indexes,
 )
 
@@ -348,6 +348,65 @@ class BackendRepository:
                 Message.__table__.update().where(Message.channel_id.is_(None)).values(channel_id=default_ch.id)
             )
         await self._enqueue_write(_write)
+
+    # ── Voice Channel CRUD ────────────────────────────────────────────
+
+    async def create_voice_channel(self, name: str, created_by: str) -> VoiceChannel | None:
+        async def _write(session):
+            existing = await session.execute(select(VoiceChannel).where(VoiceChannel.name == name))
+            if existing.scalar_one_or_none():
+                return None
+            vc = VoiceChannel(name=name, created_by=created_by)
+            session.add(vc)
+            await session.flush()
+            await session.refresh(vc)
+            return vc
+        return await self._enqueue_write(_write)
+
+    async def list_voice_channels(self) -> list[VoiceChannel]:
+        async with self._session_factory() as session:
+            result = await session.execute(select(VoiceChannel).order_by(VoiceChannel.created_at))
+            return list(result.scalars().all())
+
+    async def get_voice_channel(self, channel_id: str) -> VoiceChannel | None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(VoiceChannel).where(VoiceChannel.id == channel_id))
+            return result.scalar_one_or_none()
+
+    async def delete_voice_channel(self, channel_id: str) -> VoiceChannel | None:
+        async def _write(session):
+            result = await session.execute(select(VoiceChannel).where(VoiceChannel.id == channel_id))
+            vc = result.scalar_one_or_none()
+            if not vc:
+                return None
+            await session.delete(vc)
+            return vc
+        return await self._enqueue_write(_write)
+
+    async def count_voice_channels(self) -> int:
+        async with self._session_factory() as session:
+            result = await session.execute(select(func.count(VoiceChannel.id)))
+            return result.scalar_one()
+
+    async def migrate_default_voice_channel(self, default_name: str, owner_id: str | None = None) -> VoiceChannel:
+        """Ensure a default voice channel exists (created on app startup)."""
+        async def _write(session):
+            result = await session.execute(select(VoiceChannel).limit(1))
+            existing = result.scalar_one_or_none()
+            if existing:
+                return existing
+            # Find owner for created_by
+            creator_id = owner_id
+            if not creator_id:
+                owner_result = await session.execute(select(User).where(User.is_owner == True))
+                owner = owner_result.scalar_one_or_none()
+                creator_id = owner.id if owner else "system"
+            vc = VoiceChannel(name=default_name, created_by=creator_id)
+            session.add(vc)
+            await session.flush()
+            await session.refresh(vc)
+            return vc
+        return await self._enqueue_write(_write)
 
     async def store_refresh_token(self, user_id: str, token_hash: str, expires_at) -> RefreshToken:
         async def _write(session):

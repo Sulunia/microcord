@@ -1,7 +1,28 @@
-import { useEffect, useState, useRef } from 'preact/hooks';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'preact/hooks';
 import { UI_CONFIG, VOICE_STATE } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
+
+/**
+ * Build a TS2-style list: ALL voice channels in creation order,
+ * each with its participants nested underneath. Channels with no
+ * participants still appear (empty room).
+ */
+function buildChannelTree(voiceChannels, participants, activeChannelId) {
+  const partsByChannel = new Map();
+  for (const p of participants) {
+    const cid = p.channel_id;
+    if (!partsByChannel.has(cid)) partsByChannel.set(cid, []);
+    partsByChannel.get(cid).push(p);
+  }
+  // voiceChannels is already in creation order from the API
+  return (voiceChannels || []).map((vc) => ({
+    id: vc.id,
+    name: vc.name,
+    participants: partsByChannel.get(vc.id) || [],
+    isActive: vc.id === activeChannelId,
+  }));
+}
 
 function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch, onWatch, isNew }) {
   const initial = name.charAt(0).toUpperCase();
@@ -28,8 +49,8 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch,
   );
 }
 
-export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style, channels, onDeleteChannel, usersMap }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere } = voice;
+export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel, onJoinVoiceChannel }) {
+  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere, activeChannelId, joinChannel } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const prevIdsRef = useRef(new Set());
@@ -77,6 +98,21 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
           ? 'Disconnect'
           : 'Join Voice';
 
+  const handleVoiceChannelClick = useCallback((channelId) => {
+    if (!isJoined) {
+      if (joinChannel) joinChannel(channelId);
+    } else if (activeChannelId !== channelId) {
+      leave().then(() => {
+        if (joinChannel) joinChannel(channelId);
+      });
+    }
+  }, [isJoined, activeChannelId, joinChannel, leave]);
+
+  const channelTree = useMemo(
+    () => buildChannelTree(voiceChannels, participants, activeChannelId),
+    [voiceChannels, participants, activeChannelId],
+  );
+
   return (
     <aside class={styles.sidebar} style={style}>
       <div class={`${styles.channel} has-scrollbar`}>
@@ -85,28 +121,48 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
           <span class={styles.channelName}>{UI_CONFIG.voiceChannelName}</span>
         </div>
 
-        <ul class={styles.participantList}>
-          {participants.map((p) => {
-            const pid = p.user_id || p.id;
-            const isSharer = pid === sharerUserId;
-            const isMe = pid === user?.id;
-            const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
-            const participantMuted = Boolean(p.muted);
-            return (
-              <Participant
-                key={pid}
-                name={p.name}
-                avatarUrl={p.avatar_url}
-                isSpeaking={speakingUsers.get(pid) ?? Boolean(p.speaking)}
-                isSharer={isSharer}
-                isMuted={participantMuted}
-                canWatch={canWatch}
-                onWatch={screenshare?.requestStream}
-                isNew={newIds.has(pid)}
-              />
-            );
-          })}
-        </ul>
+        {voiceChannels && voiceChannels.length > 0 && (
+          <ul class={styles.participantList}>
+            {channelTree.map((ch) => (
+              <>
+                <li
+                  class={`${styles.channelGroupHeader} ${ch.isActive ? styles.voiceChannelActive : ''}`}
+                  onClick={() => handleVoiceChannelClick(ch.id)}
+                >
+                  <span class={styles.channelGroupIcon}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  </span>
+                  <span class={styles.channelGroupName}>{ch.name}</span>
+                  <span class={styles.voiceChannelCount}>{ch.participants.length}</span>
+                </li>
+                {ch.participants.map((p) => {
+                  const pid = p.user_id || p.id;
+                  const isSharer = pid === sharerUserId;
+                  const isMe = pid === user?.id;
+                  const canWatch = isJoined && isSharer && !isMe && !currentlyViewing;
+                  const participantMuted = Boolean(p.muted);
+                  return (
+                    <Participant
+                      key={pid}
+                      name={p.name}
+                      avatarUrl={p.avatar_url}
+                      isSpeaking={speakingUsers.get(pid) ?? Boolean(p.speaking)}
+                      isSharer={isSharer}
+                      isMuted={participantMuted}
+                      canWatch={canWatch}
+                      onWatch={screenshare?.requestStream}
+                      isNew={newIds.has(pid)}
+                    />
+                  );
+                })}
+              </>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div class={styles.controls}>
@@ -178,6 +234,9 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
         channels={channels}
         onDeleteChannel={onDeleteChannel}
         usersMap={usersMap}
+        voiceChannels={voiceChannels}
+        onCreateVoiceChannel={onCreateVoiceChannel}
+        onDeleteVoiceChannel={onDeleteVoiceChannel}
       />
     </aside>
   );

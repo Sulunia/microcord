@@ -29,10 +29,12 @@ export function useVoice(user) {
     const [joinState, setJoinState] = useState(VOICE_STATE.IDLE);
     const [isMuted, setIsMuted] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [activeChannelId, setActiveChannelId] = useState(null);
 
     const streamRef = useRef(null);
     const vadMonitorRef = useRef(null);
     const vadSpeakingRef = useRef(false);
+    const targetChannelIdRef = useRef(null);
 
     const isJoined = joinState === VOICE_STATE.JOINED;
 
@@ -169,7 +171,7 @@ export function useVoice(user) {
             const response = await authedFetch(`${API_BASE}/voice/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ connection_id: connectionId }),
+                body: JSON.stringify({ connection_id: connectionId, channel_id: targetChannelIdRef.current }),
             });
             if (!response.ok) throw new Error('Join failed');
             backendJoined = true;
@@ -177,6 +179,7 @@ export function useVoice(user) {
             const { participants: participantList } = await response.json();
             setParticipants(participantList);
             setJoinState(VOICE_STATE.JOINED);
+            setActiveChannelId(targetChannelIdRef.current);
 
             if (noInputDevice) {
                 setIsMuted(true);
@@ -213,6 +216,8 @@ export function useVoice(user) {
             body: JSON.stringify({}),
         }).catch(() => {});
 
+        setActiveChannelId(null);
+        targetChannelIdRef.current = null;
         setJoinState(VOICE_STATE.IDLE);
         await fetchParticipants();
     }, [fetchParticipants, cleanup, userRef]);
@@ -233,6 +238,11 @@ export function useVoice(user) {
         });
     }, [send, gateAudioToPeers]);
 
+    const joinChannel = useCallback((channelId) => {
+        targetChannelIdRef.current = channelId;
+        return join();
+    }, [join]);
+
     return {
         participants,
         isJoined,
@@ -246,5 +256,7 @@ export function useVoice(user) {
         setVolume,
         fetchParticipants,
         joinedElsewhere,
+        activeChannelId,
+        joinChannel,
     };
 }
