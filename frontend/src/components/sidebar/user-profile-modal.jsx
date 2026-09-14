@@ -231,30 +231,33 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
               </div>
             </div>
             <div class={styles.profileToggleGroup}>
-              <label>
+              <div class={styles.profileToggleOption}>
                 <input
                   type="checkbox"
+                  id="pref-echo-cancellation"
                   checked={echoCancellation}
                   onChange={(e) => setEchoCancellation(e.target.checked)}
                 />
-                Echo Cancellation
-              </label>
-              <label>
+                <label for="pref-echo-cancellation">Echo Cancellation</label>
+              </div>
+              <div class={styles.profileToggleOption}>
                 <input
                   type="checkbox"
+                  id="pref-noise-suppression"
                   checked={noiseSuppression}
                   onChange={(e) => setNoiseSuppression(e.target.checked)}
                 />
-                Noise Suppression
-              </label>
-              <label>
+                <label for="pref-noise-suppression">Noise Suppression</label>
+              </div>
+              <div class={styles.profileToggleOption}>
                 <input
                   type="checkbox"
+                  id="pref-auto-gain-control"
                   checked={autoGainControl}
                   onChange={(e) => setAutoGainControl(e.target.checked)}
                 />
-                Automatic Gain Control
-              </label>
+                <label for="pref-auto-gain-control">Automatic Gain Control</label>
+              </div>
             </div>
             <p class={styles.profileHint}>Audio filter changes apply on the next voice join.</p>
             <div class={styles.profileVadGroup}>

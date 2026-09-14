@@ -446,10 +446,10 @@
   align-items: flex-start;
 }
 
-.profileToggleGroup label {
+.profileToggleOption {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   font-size: 0.85rem;
 }
 
