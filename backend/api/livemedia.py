@@ -1,6 +1,5 @@
 from constants import (
     ICE_SERVERS,
-    VOICE_ECHO_CANCELLATION, VOICE_NOISE_SUPPRESSION, VOICE_AUTO_GAIN_CONTROL,
     VOICE_OPUS_BITRATE, VOICE_OPUS_STEREO,
     SCREENSHARE_WIDTH, SCREENSHARE_HEIGHT, SCREENSHARE_FRAME_RATE,
     MEDIA_AVIF_CRF, MEDIA_AV1_CRF, MEDIA_VIDEO_SCALE, MEDIA_VIDEO_MAX_BITRATE,
@@ -13,9 +12,6 @@ async def get_live_media_config() -> dict:
     return {
         "ice_servers": ICE_SERVERS,
         "audio": {
-            "echo_cancellation": VOICE_ECHO_CANCELLATION,
-            "noise_suppression": VOICE_NOISE_SUPPRESSION,
-            "auto_gain_control": VOICE_AUTO_GAIN_CONTROL,
             "opus_bitrate": VOICE_OPUS_BITRATE,
             "opus_stereo": VOICE_OPUS_STEREO,
         },
