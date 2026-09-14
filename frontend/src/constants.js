@@ -15,6 +15,9 @@ export const REFRESH_TOKEN_STORAGE_KEY = 'microcord_refresh_token';
 export const AUDIO_INPUT_KEY = 'mc-audio-input';
 export const AUDIO_OUTPUT_KEY = 'mc-audio-output';
 export const VAD_SENSITIVITY_KEY = 'mc-vad-sensitivity';
+export const ECHO_CANCELLATION_KEY = 'mc-echo-cancellation';
+export const NOISE_SUPPRESSION_KEY = 'mc-noise-suppression';
+export const AUTO_GAIN_CONTROL_KEY = 'mc-auto-gain-control';
 
 export const APP_VERSION = '0.9.4';
 
