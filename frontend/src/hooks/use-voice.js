@@ -5,7 +5,6 @@ import { useRealtime } from './realtime.jsx';
 import { useAudioPreferences } from './use-audio-preferences.js';
 import { startVadMonitor } from './vad-monitor.js';
 import { useLatest } from './use-latest.js';
-import { useLiveMediaConfig } from './use-live-media-config.js';
 import { useVoiceMesh } from './use-voice-mesh.js';
 import { useVoiceParticipants } from './use-voice-participants.js';
 
@@ -20,8 +19,7 @@ import { useVoiceParticipants } from './use-voice-participants.js';
  *   - `useVoiceMesh` — WebRTC peer connections, audio senders, remote audio elements
  *   - `useVoiceParticipants` — participant list, speaking state, WS subscriptions
  *   - `startVadMonitor` (vad-monitor.js) — RMS-based VAD
- *   - `useLiveMediaConfig` — ICE servers / audio config
- *   - `useAudioPreferences` — input device / VAD sensitivity
+ *   - `useAudioPreferences` — input device / audio filters / VAD sensitivity
  *
  * @param {{ id: string } | null} user
  */
@@ -39,7 +37,6 @@ export function useVoice(user) {
     const isJoined = joinState === VOICE_STATE.JOINED;
 
     const { prefsRef } = useAudioPreferences();
-    const { audioConfig } = useLiveMediaConfig();
     const { send, connectionId } = useRealtime();
 
     const userRef = useLatest(user);
@@ -151,12 +148,12 @@ export function useVoice(user) {
         let backendJoined = false;
 
         try {
-            const inputDeviceId = prefsRef.current.inputDevice;
+            const { echoCancellation, noiseSuppression, autoGainControl, inputDevice } = prefsRef.current;
             const audioConstraints = {
-                echoCancellation: audioConfig.echo_cancellation,
-                noiseSuppression: audioConfig.noise_suppression,
-                autoGainControl: audioConfig.auto_gain_control,
-                ...(inputDeviceId ? { deviceId: { exact: inputDeviceId } } : {}),
+                echoCancellation,
+                noiseSuppression,
+                autoGainControl,
+                ...(inputDevice ? { deviceId: { exact: inputDevice } } : {}),
             };
 
             let noInputDevice = false;
@@ -201,7 +198,7 @@ export function useVoice(user) {
             }
             setJoinState(VOICE_STATE.IDLE);
         }
-    }, [cleanup, startVad, sendOffersToParticipants, prefsRef, audioConfig, userRef, joinStateRef, setParticipants, connectionId, joinedElsewhereRef]);
+    }, [cleanup, startVad, sendOffersToParticipants, prefsRef, userRef, joinStateRef, setParticipants, connectionId, joinedElsewhereRef]);
 
     const leave = useCallback(async () => {
         const currentUser = userRef.current;
