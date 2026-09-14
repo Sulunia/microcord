@@ -25,10 +25,16 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
     inputDevice: selectedInput,
     outputDevice: selectedOutput,
     vadSensitivity,
+    echoCancellation,
+    noiseSuppression,
+    autoGainControl,
     prefsRef,
     setInput: setSelectedInput,
     setOutput: setSelectedOutput,
     setVadSensitivity,
+    setEchoCancellation,
+    setNoiseSuppression,
+    setAutoGainControl,
   } = useAudioPreferences();
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
@@ -224,6 +230,33 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                 </select>
               </div>
             </div>
+            <div class={styles.profileToggleGroup}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={echoCancellation}
+                  onChange={(e) => setEchoCancellation(e.target.checked)}
+                />
+                Echo Cancellation
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={noiseSuppression}
+                  onChange={(e) => setNoiseSuppression(e.target.checked)}
+                />
+                Noise Suppression
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={autoGainControl}
+                  onChange={(e) => setAutoGainControl(e.target.checked)}
+                />
+                Automatic Gain Control
+              </label>
+            </div>
+            <p class={styles.profileHint}>Audio filter changes apply on the next voice join.</p>
             <div class={styles.profileVadGroup}>
               <label for="vad-sensitivity">Voice Activation Sensitivity: {vadSensitivity} {micDetected ? '🟢' : '🔴'}</label>
               <input
