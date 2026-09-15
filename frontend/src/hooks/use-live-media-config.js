@@ -3,9 +3,6 @@ import { LIVE_MEDIA_CONFIG, initLiveMediaConfig } from '../constants.js';
 
 const FALLBACK_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 const FALLBACK_AUDIO_CONFIG = {
-    echo_cancellation: true,
-    noise_suppression: true,
-    auto_gain_control: true,
     opus_bitrate: 32000,
     opus_stereo: false,
 };

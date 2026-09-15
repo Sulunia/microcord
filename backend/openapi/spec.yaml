@@ -950,12 +950,6 @@ components:
         audio:
           type: object
           properties:
-            echo_cancellation:
-              type: boolean
-            noise_suppression:
-              type: boolean
-            auto_gain_control:
-              type: boolean
             opus_bitrate:
               type: integer
               minimum: 6000

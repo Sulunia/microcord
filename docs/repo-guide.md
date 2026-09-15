@@ -55,7 +55,7 @@ microcord/
 │   │   ├── chat.py             # list_messages, send_message, delete_message (channel_id aware)
 │   │   ├── channels.py         # list_channels, create_channel, update_channel, delete_channel (admin/owner only)
 │   │   ├── config.py           # get_branding (app name, voice channel name)
-│   │   ├── livemedia.py        # get_live_media_config (ICE, audio, screenshare, media processing)
+│   │   ├── livemedia.py        # get_live_media_config (ICE, Opus settings, screenshare, media processing)
 │   │   ├── users.py            # list_users, get_user, update_user, get_online_users, set_user_admin, recover_account
 │   │   ├── voice.py            # join, leave, participants
 │   │   └── upload.py           # upload_file, upload_avatar (thin orchestration via services/utils/)
@@ -85,12 +85,12 @@ microcord/
 │       ├── app.jsx             # Shell: login vs main window, <RealtimeProvider> wrapper, <AuthenticatedApp> with hook composition (useChannels → useChat), resizable sidebar, toggleable members sidebar
 │       ├── constants.js        # API_BASE, WS_URL, storage keys, version, page size, notification sound constants; re-exports UI_CONFIG, LIVE_MEDIA_CONFIG
 │       ├── runtime-config.js   # UI_CONFIG: app name, voice channel name (fetched from /api/branding)
-│       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, audio, screenshare, media (fetched from /api/livemediaconfig)
+│       ├── live-media-config.js # LIVE_MEDIA_CONFIG: ICE, Opus settings, screenshare, media (fetched from /api/livemediaconfig)
 │       ├── hooks/
 │       │   ├── realtime.jsx        # RealtimeProvider context + useRealtime() hook; owns WS lifecycle (ticket, connect, reconnect); exposes send/subscribe/connected
 │       │   ├── webrtc-helpers.js   # createPeerMap() factory — shared peer-connection map with closePeer, closeAllPeers, sendOffer, applySignal
 │       │   ├── vad-monitor.js      # startVadMonitor(stream, { prefsRef, onSpeakingChange }) — reusable RMS-based VAD; returns { stop }
-│       │   ├── use-audio-preferences.js # useAudioPreferences() — reactive localStorage-backed audio prefs (input/output/vadSensitivity) with prefsRef for hot loops
+│       │   ├── use-audio-preferences.js # useAudioPreferences() — reactive localStorage-backed audio prefs (input/output devices, echo cancellation, noise suppression, auto gain control, VAD sensitivity) with prefsRef for hot loops
 │       │   ├── audio-notifications.js # playNotification(url, volume) — cached notification sound playback; SOUND_ENTER_VOICE / SOUND_EXIT_VOICE constants
 │       │   ├── use-latest.js       # useLatest(value) — returns a stable ref that always holds the latest value (replaces manual ref-mirror pattern)
 │       │   ├── use-live-media-config.js # useLiveMediaConfig() — initialises LIVE_MEDIA_CONFIG once, exposes iceServers / audioConfig / screenshareConfig
@@ -111,7 +111,7 @@ microcord/
 │       │   ├── sidebar/
 │       │   │   ├── sidebar.jsx             # Voice channel, participant list, VAD speaking indicator, screenshare controls
 │       │   │   ├── server-setup-modal.jsx  # Admin server setup modal (channel management, account recovery for owner)
-│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, VAD sensitivity slider with live mic indicator, server admin button (admin/owner only)
+│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, audio filter checkboxes (echo cancellation / noise suppression / auto gain control), VAD sensitivity slider with live mic indicator, server admin button (admin/owner only)
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
 │       │       │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split, header bar with channel tabs, context menu for rename/delete, create channel modal
@@ -141,7 +141,7 @@ All HTTP endpoints are defined in `backend/openapi/spec.yaml` and served under `
 | Method | Path | Handler | Description |
 |--------|------|---------|-------------|
 | GET | `/api/branding` | `api.config.get_branding` | Public UI branding (app name, voice channel name). No auth required |
-| GET | `/api/livemediaconfig` | `api.livemedia.get_live_media_config` | Live media config (ICE servers, audio, screenshare, media processing). Requires JWT |
+| GET | `/api/livemediaconfig` | `api.livemedia.get_live_media_config` | Live media config (ICE servers, Opus settings, screenshare, media processing). Requires JWT |
 | GET | `/api/auth/status` | `api.auth.status` | Auth provider info (`{ "provider": "local" }`) |
 | POST | `/api/auth/register` | `api.auth.register` | Register (name + password + passphrase) → user + access_token + refresh_token. Rate limited: 3/hour/IP |
 | POST | `/api/auth/login` | `api.auth.login` | Login (name + password) → user + access_token + refresh_token. Rate limited: 5/min/IP |
@@ -225,9 +225,6 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 | `APP_NAME` | `🔊 Microcord` | Backend | Application name shown in title bar and login screen |
 | `VOICE_CHANNEL_NAME` | `Voice channel` | Backend | Display name for the voice channel in the sidebar |
 | `ICE_SERVERS` | `[{"urls":"stun:stun.l.google.com:19302"}]` | Backend | JSON array of ICE server objects for WebRTC (STUN/TURN) |
-| `VOICE_ECHO_CANCELLATION` | `true` | Backend | Enable echo cancellation for voice |
-| `VOICE_NOISE_SUPPRESSION` | `true` | Backend | Enable noise suppression for voice |
-| `VOICE_AUTO_GAIN_CONTROL` | `true` | Backend | Enable automatic gain control for voice |
 | `VOICE_OPUS_BITRATE` | `32000` | Backend | Opus codec bitrate (6000–510000 bps) |
 | `VOICE_OPUS_STEREO` | `false` | Backend | Enable stereo Opus audio |
 | `SCREENSHARE_WIDTH` | `1920` | Backend | Screenshare capture width |
@@ -244,6 +241,7 @@ The client first obtains a ticket via `POST /api/auth/ws-ticket` (requires JWT),
 
 > *(removed 2026-04-24)* `APP_TAGLINE` — tagline removed from UI; endpoint no longer returns it
 > *(removed 2026-04-28)* `JWT_EXPIRY_HOURS` — replaced by `ACCESS_TOKEN_EXPIRY_MINUTES` and `REFRESH_TOKEN_EXPIRY_DAYS`
+> *(removed 2026-09-14)* `VOICE_ECHO_CANCELLATION` / `VOICE_NOISE_SUPPRESSION` / `VOICE_AUTO_GAIN_CONTROL` — echo cancellation, noise suppression, and auto gain control are now per-user client-side preferences (see the Voice flow)
 
 ---
 
@@ -382,9 +380,9 @@ Starlette is provided transitively through Connexion.
 
 ### Voice
 
-1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, audio constraints) via `useLiveMediaConfig()`.
+1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, Opus settings) via `useLiveMediaConfig()`. Echo cancellation, noise suppression, and auto gain control are not part of this config — they are per-user client-side preferences read from `useAudioPreferences` (localStorage keys `mc-echo-cancellation`, `mc-noise-suppression`, `mc-auto-gain-control`; default `true`), toggled via checkboxes in the profile modal.
 2. `useVoice.join()` (orchestrator) transitions through a state machine: `idle → joining → joined` (or back to `idle` on error).
-3. On `joining`: acquire mic stream via `getUserMedia` (using constraints from `useLiveMediaConfig` and device from `useAudioPreferences`), then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
+3. On `joining`: acquire mic stream via `getUserMedia` (echo cancellation / noise suppression / auto gain control plus input device constraints from `useAudioPreferences`), then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
 4. `voice_participant_joined` broadcast to all WS clients.
 5. Joiner sends SDP offers via `useVoiceMesh.sendOffersToParticipants()` — creates an `RTCPeerConnection` (mesh) to each existing participant through `createPeerMap()` from `webrtc-helpers.js`. SDP is munged via `voice-sdp.js` (`mungeOpusSdp`) to apply Opus bitrate/stereo settings.
 6. Existing participants receive offers, create answers, and send them back via `voice_signal`.

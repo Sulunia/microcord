@@ -438,6 +438,27 @@
   box-sizing: border-box;
 }
 
+.profileToggleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 75%;
+  align-items: flex-start;
+}
+
+.profileToggleOption {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+.profileHint {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--mc-text-muted);
+}
+
 .profileTickGroup {
   display: flex;
   flex-direction: column;

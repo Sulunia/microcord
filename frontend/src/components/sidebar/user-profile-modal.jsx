@@ -25,10 +25,16 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
     inputDevice: selectedInput,
     outputDevice: selectedOutput,
     vadSensitivity,
+    echoCancellation,
+    noiseSuppression,
+    autoGainControl,
     prefsRef,
     setInput: setSelectedInput,
     setOutput: setSelectedOutput,
     setVadSensitivity,
+    setEchoCancellation,
+    setNoiseSuppression,
+    setAutoGainControl,
   } = useAudioPreferences();
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
@@ -224,6 +230,36 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                 </select>
               </div>
             </div>
+            <div class={styles.profileToggleGroup}>
+              <div class={styles.profileToggleOption}>
+                <input
+                  type="checkbox"
+                  id="pref-echo-cancellation"
+                  checked={echoCancellation}
+                  onChange={(e) => setEchoCancellation(e.target.checked)}
+                />
+                <label for="pref-echo-cancellation">Echo Cancellation</label>
+              </div>
+              <div class={styles.profileToggleOption}>
+                <input
+                  type="checkbox"
+                  id="pref-noise-suppression"
+                  checked={noiseSuppression}
+                  onChange={(e) => setNoiseSuppression(e.target.checked)}
+                />
+                <label for="pref-noise-suppression">Noise Suppression</label>
+              </div>
+              <div class={styles.profileToggleOption}>
+                <input
+                  type="checkbox"
+                  id="pref-auto-gain-control"
+                  checked={autoGainControl}
+                  onChange={(e) => setAutoGainControl(e.target.checked)}
+                />
+                <label for="pref-auto-gain-control">Automatic Gain Control</label>
+              </div>
+            </div>
+            <p class={styles.profileHint}>Audio filter changes apply on the next voice join.</p>
             <div class={styles.profileVadGroup}>
               <label for="vad-sensitivity">Voice Activation Sensitivity: {vadSensitivity} {micDetected ? '🟢' : '🔴'}</label>
               <input

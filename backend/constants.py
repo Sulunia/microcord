@@ -77,9 +77,6 @@ FFMPEG_MEMORY_LIMIT_MB = _env_int("FFMPEG_MEMORY_LIMIT_MB", 256)
 _ICE_SERVERS_DEFAULT = '[{"urls": "stun:stun.l.google.com:19302"}]'
 ICE_SERVERS = json.loads(_env("ICE_SERVERS", _ICE_SERVERS_DEFAULT))
 
-VOICE_ECHO_CANCELLATION = _env("VOICE_ECHO_CANCELLATION", "true").lower() in ("1", "true", "yes")
-VOICE_NOISE_SUPPRESSION = _env("VOICE_NOISE_SUPPRESSION", "true").lower() in ("1", "true", "yes")
-VOICE_AUTO_GAIN_CONTROL = _env("VOICE_AUTO_GAIN_CONTROL", "true").lower() in ("1", "true", "yes")
 VOICE_OPUS_BITRATE = max(6000, min(510000, _env_int("VOICE_OPUS_BITRATE", 32000)))
 VOICE_OPUS_STEREO = _env("VOICE_OPUS_STEREO", "false").lower() in ("1", "true", "yes")
 

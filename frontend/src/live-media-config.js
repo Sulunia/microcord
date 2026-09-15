@@ -5,9 +5,6 @@ const API_BASE = '/api';
 const config = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     audio: {
-        echo_cancellation: true,
-        noise_suppression: true,
-        auto_gain_control: true,
         opus_bitrate: 32000,
         opus_stereo: false,
     },
