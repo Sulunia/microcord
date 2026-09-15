@@ -38,6 +38,8 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
     const peerMapRef = useRef(null);
     const audioSendersRef = useRef(new Map());
     const audioElementsRef = useRef(new Map());
+    const outputAudioContextRef = useRef(null);
+    const outputNodesRef = useRef(new Map());
     const { iceServers, audioConfig } = useLiveMediaConfig();
 
     /** Lazily create the peer map (reads ICE servers at call time). */
@@ -71,6 +73,40 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
     }, [streamRef]);
 
     /**
+     * Route a remote stream through WebAudio so mobile browsers play it on the
+     * media/speaker output instead of the earpiece call channel. The audio
+     * element stays as a muted holder; on failure it keeps playing normally.
+     */
+    const routeRemoteThroughWebAudio = useCallback((targetId, remoteStream, entry) => {
+        try {
+            if (!outputAudioContextRef.current) outputAudioContextRef.current = new AudioContext();
+            const audioContext = outputAudioContextRef.current;
+            const source = audioContext.createMediaStreamSource(remoteStream);
+            const gain = audioContext.createGain();
+            gain.gain.value = entry.volume ?? 1.0;
+            source.connect(gain).connect(audioContext.destination);
+            if (audioContext.state === 'suspended') {
+                const resumeCtx = () => {
+                    audioContext.resume().catch(() => {});
+                    document.removeEventListener('click', resumeCtx);
+                    document.removeEventListener('touchend', resumeCtx);
+                    document.removeEventListener('keydown', resumeCtx);
+                };
+                document.addEventListener('click', resumeCtx);
+                document.addEventListener('touchend', resumeCtx);
+                document.addEventListener('keydown', resumeCtx);
+            } else {
+                audioContext.resume().catch(() => {});
+            }
+            entry.audio.muted = true;
+            entry.gain = gain;
+            outputNodesRef.current.set(targetId, { source, gain });
+        } catch (err) {
+            console.warn('webaudio output routing failed, using element playback:', err);
+        }
+    }, []);
+
+    /**
      * Callback invoked when a new RTCPeerConnection is created for a target.
      * Adds local tracks, stores audio sender, and wires up `ontrack` for
      * remote audio playback via hidden DOM audio elements.
@@ -96,6 +132,9 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
             if (existing) {
                 existing.audio.srcObject = remoteStream;
                 ensureAudioPlay(existing.audio);
+                const stale = outputNodesRef.current.get(targetId);
+                if (stale) { stale.source.disconnect(); stale.gain.disconnect(); }
+                routeRemoteThroughWebAudio(targetId, remoteStream, existing);
             } else {
                 const audio = document.createElement('audio');
                 audio.setAttribute('autoplay', '');
@@ -110,10 +149,12 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
 
                 audio.srcObject = remoteStream;
                 ensureAudioPlay(audio);
-                audioElementsRef.current.set(targetId, { audio, volume: 1.0 });
+                const entry = { audio, volume: 1.0 };
+                audioElementsRef.current.set(targetId, entry);
+                routeRemoteThroughWebAudio(targetId, remoteStream, entry);
             }
         };
-    }, [streamRef, vadSpeakingRef, isMutedRef]);
+    }, [streamRef, vadSpeakingRef, isMutedRef, routeRemoteThroughWebAudio]);
 
     /**
      * Send offers to all given participants (excluding `excludeUserId`).
@@ -150,6 +191,8 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
     const disposePeer = useCallback((userId) => {
         getPeerMap().closePeer(userId);
         audioSendersRef.current.delete(userId);
+        const nodes = outputNodesRef.current.get(userId);
+        if (nodes) { nodes.source.disconnect(); nodes.gain.disconnect(); outputNodesRef.current.delete(userId); }
         const entry = audioElementsRef.current.get(userId);
         if (entry) {
             entry.audio.pause();
@@ -163,6 +206,10 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
     const disposeAllPeers = useCallback(() => {
         peerMapRef.current?.closeAllPeers();
         audioSendersRef.current.clear();
+        outputNodesRef.current.forEach(({ source, gain }) => { source.disconnect(); gain.disconnect(); });
+        outputNodesRef.current.clear();
+        outputAudioContextRef.current?.close().catch(() => {});
+        outputAudioContextRef.current = null;
         audioElementsRef.current.forEach(({ audio }) => {
             audio.pause();
             audio.srcObject = null;
@@ -182,6 +229,7 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
         if (entry) {
             entry.volume = volume;
             entry.audio.volume = volume;
+            if (entry.gain) entry.gain.gain.value = volume;
         }
     }, []);
 
