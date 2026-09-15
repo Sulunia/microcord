@@ -66,7 +66,7 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
     const gateAudioToPeers = useCallback((enabled) => {
         const audioTrack = streamRef.current?.getAudioTracks()[0];
         audioSendersRef.current.forEach((sender) => {
-            sender.replaceTrack(enabled ? audioTrack : null).catch(() => {});
+            sender.replaceTrack(enabled ? audioTrack : null).catch((err) => console.warn('replaceTrack (vad gate) failed:', err));
         });
     }, [streamRef]);
 
@@ -85,7 +85,7 @@ export function useVoiceMesh({ send, streamRef, vadSpeakingRef, isMutedRef }) {
                 audioSendersRef.current.set(targetId, sender);
                 const isActivelySpeaking = vadSpeakingRef.current && !isMutedRef.current;
                 if (!isActivelySpeaking) {
-                    sender.replaceTrack(null).catch(() => {});
+                    sender.replaceTrack(null).catch((err) => console.warn('replaceTrack (initial gate) failed:', err));
                 }
             }
         });

@@ -4,7 +4,7 @@ import { MessageInput } from '../chat/message-input.jsx';
 import { ScreenshareView } from '../screenshare/screenshare-view.jsx';
 import { UserProfileModal } from '../sidebar/user-profile-modal.jsx';
 import { LoadingSpinner } from '../shared/loading-spinner.jsx';
-import { UI_CONFIG, VOICE_STATE, SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, MAX_CHANNEL_NAME_LENGTH } from '../../constants.js';
+import { UI_CONFIG, SCROLL_TOP_THRESHOLD, SCROLL_BOTTOM_TOLERANCE, EMPTY_CONTENT_HEIGHT, GROUP_THRESHOLD_MS, MAX_CHANNEL_NAME_LENGTH } from '../../constants.js';
 import styles from './mobile-layout.module.css';
 
 function getAuthorId(msg) {
@@ -32,7 +32,7 @@ function buildChannelTree(voiceChannels, participants, activeChannelId) {
 }
 
 function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAvatar, onLogout, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere, activeChannelId, joinChannel } = voice;
+  const { participants, isJoined, isMuted, isSpeaking, speakingUsers, leave, toggleMute, activeChannelId, joinChannel } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -49,18 +49,6 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
   const sharerName = sharingParticipant?.name;
   const someoneElseSharing = Boolean(sharerUserId) && sharerUserId !== user?.id;
   const currentlyViewing = screenshare?.isViewing;
-
-  const isVoiceTransitioning = joinState === VOICE_STATE.JOINING || joinState === VOICE_STATE.LEAVING;
-  const isBlockedByOtherDevice = joinedElsewhere && !isJoined;
-  const voiceBtnLabel = isBlockedByOtherDevice
-    ? 'In voice on another device'
-    : joinState === VOICE_STATE.JOINING
-      ? 'Joining…'
-      : joinState === VOICE_STATE.LEAVING
-        ? 'Leaving…'
-        : isJoined
-          ? 'Disconnect'
-          : 'Join Voice';
 
   const handleVoiceChannelClick = useCallback((channelId) => {
     if (!isJoined) {
@@ -100,6 +88,9 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
                     </svg>
                   </span>
                   <span class={styles.channelGroupName}>{ch.name}</span>
+                  {!ch.isActive && !isJoined && (
+                    <span class={styles.voiceChannelJoinHint}>JOIN</span>
+                  )}
                   <span class={styles.voiceChannelCount}>{ch.participants.length}</span>
                 </li>
                 {ch.participants.map((p) => {
@@ -158,13 +149,14 @@ function MobileVoiceTab({ voice, screenshare, user, onUpdateProfile, onUploadAva
             </button>
           )}
         </div>
-        <button
-          class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
-          onClick={isJoined ? leave : join}
-          disabled={isVoiceTransitioning || isBlockedByOtherDevice}
-        >
-          {voiceBtnLabel}
-        </button>
+        {isJoined && (
+          <button
+            class={`${styles.voiceBtn} ${styles.voiceBtnLeave}`}
+            onClick={leave}
+          >
+            Disconnect
+          </button>
+        )}
         {isJoined && screenshare?.screenshareSupported && (
           <button
             class={`${styles.voiceShareBtn} ${screenshare?.isSharing ? styles.voiceShareBtnActive : ''}`}

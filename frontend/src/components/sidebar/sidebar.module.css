@@ -77,6 +77,18 @@
   font-weight: 600;
 }
 
+.voiceChannelJoinHint {
+  display: none;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--mc-text-muted);
+}
+
+.channelGroupHeader:hover .voiceChannelJoinHint {
+  display: inline;
+}
+
 .voiceChannelCount {
   font-size: 0.68rem;
   color: var(--mc-text-muted);
