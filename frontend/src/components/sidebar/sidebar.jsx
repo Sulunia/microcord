@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'preact/hooks';
-import { UI_CONFIG, VOICE_STATE } from '../../constants.js';
+import { UI_CONFIG } from '../../constants.js';
 import styles from './sidebar.module.css';
 import { UserProfileModal } from './user-profile-modal.jsx';
 
@@ -50,7 +50,7 @@ function Participant({ name, avatarUrl, isSpeaking, isSharer, isMuted, canWatch,
 }
 
 export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout, screenshare, style, channels, onDeleteChannel, usersMap, voiceChannels, onCreateVoiceChannel, onDeleteVoiceChannel, onJoinVoiceChannel }) {
-  const { participants, isJoined, joinState, isMuted, isSpeaking, speakingUsers, join, leave, toggleMute, joinedElsewhere, activeChannelId, joinChannel } = voice;
+  const { participants, isJoined, isMuted, isSpeaking, speakingUsers, leave, toggleMute, activeChannelId, joinChannel } = voice;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const prevIdsRef = useRef(new Set());
@@ -85,18 +85,6 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
   const sharerName = sharingParticipant?.name;
   const someoneElseSharing = Boolean(sharerUserId) && sharerUserId !== user?.id;
   const currentlyViewing = screenshare?.isViewing;
-
-  const isVoiceTransitioning = joinState === VOICE_STATE.JOINING || joinState === VOICE_STATE.LEAVING;
-  const isBlockedByOtherDevice = joinedElsewhere && !isJoined;
-  const voiceBtnLabel = isBlockedByOtherDevice
-    ? 'In voice on another device'
-    : joinState === VOICE_STATE.JOINING
-      ? 'Joining…'
-      : joinState === VOICE_STATE.LEAVING
-        ? 'Leaving…'
-        : isJoined
-          ? 'Disconnect'
-          : 'Join Voice';
 
   const handleVoiceChannelClick = useCallback((channelId) => {
     if (!isJoined) {
@@ -137,6 +125,9 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
                     </svg>
                   </span>
                   <span class={styles.channelGroupName}>{ch.name}</span>
+                  {!ch.isActive && !isJoined && (
+                    <span class={styles.voiceChannelJoinHint}>JOIN</span>
+                  )}
                   <span class={styles.voiceChannelCount}>{ch.participants.length}</span>
                 </li>
                 {ch.participants.map((p) => {
@@ -199,13 +190,14 @@ export function Sidebar({ voice, user, onUpdateProfile, onUploadAvatar, onLogout
             </button>
           )}
         </div>
-        <button
-          class={`${styles.voiceBtn} ${isJoined ? styles.voiceBtnLeave : ''}`}
-          onClick={isJoined ? leave : join}
-          disabled={isVoiceTransitioning || isBlockedByOtherDevice}
-        >
-          {voiceBtnLabel}
-        </button>
+        {isJoined && (
+          <button
+            class={`${styles.voiceBtn} ${styles.voiceBtnLeave}`}
+            onClick={leave}
+          >
+            Disconnect
+          </button>
+        )}
         {isJoined && screenshare?.screenshareSupported && (
           <button
             class={`${styles.shareBtn} ${screenshare?.isSharing ? styles.shareBtnActive : ''}`}

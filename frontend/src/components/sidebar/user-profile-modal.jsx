@@ -28,6 +28,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
     echoCancellation,
     noiseSuppression,
     autoGainControl,
+    rnnoiseEnabled,
     prefsRef,
     setInput: setSelectedInput,
     setOutput: setSelectedOutput,
@@ -35,6 +36,7 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
     setEchoCancellation,
     setNoiseSuppression,
     setAutoGainControl,
+    setRnnoise,
   } = useAudioPreferences();
   const { theme, setTheme } = useTheme();
   const fileRef = useRef(null);
@@ -258,8 +260,21 @@ export function UserProfileModal({ isOpen, user, isSpeaking, onClose, onSave, on
                 />
                 <label for="pref-auto-gain-control">Automatic Gain Control</label>
               </div>
+              {noiseSuppression && (
+                <div class={styles.profileToggleOption}>
+                  <input
+                    type="checkbox"
+                    id="pref-rnnoise"
+                    checked={rnnoiseEnabled}
+                    onChange={(e) => setRnnoise(e.target.checked)}
+                  />
+                  <label for="pref-rnnoise">Use RNNoise</label>
+                </div>
+              )}
             </div>
-            <p class={styles.profileHint}>Audio filter changes apply on the next voice join.</p>
+            <p class={styles.profileHint}>
+              Use RNNoise replaces the browser noise suppression (experimental). Audio changes apply on the next voice join.
+            </p>
             <div class={styles.profileVadGroup}>
               <label for="vad-sensitivity">Voice Activation Sensitivity: {vadSensitivity} {micDetected ? '🟢' : '🔴'}</label>
               <input

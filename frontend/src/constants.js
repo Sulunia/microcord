@@ -18,6 +18,7 @@ export const VAD_SENSITIVITY_KEY = 'mc-vad-sensitivity';
 export const ECHO_CANCELLATION_KEY = 'mc-echo-cancellation';
 export const NOISE_SUPPRESSION_KEY = 'mc-noise-suppression';
 export const AUTO_GAIN_CONTROL_KEY = 'mc-auto-gain-control';
+export const RNNOISE_KEY = 'mc-rnnoise';
 
 export const APP_VERSION = '0.9.4';
 

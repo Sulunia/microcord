@@ -90,7 +90,7 @@ microcord/
 │       │   ├── realtime.jsx        # RealtimeProvider context + useRealtime() hook; owns WS lifecycle (ticket, connect, reconnect); exposes send/subscribe/connected
 │       │   ├── webrtc-helpers.js   # createPeerMap() factory — shared peer-connection map with closePeer, closeAllPeers, sendOffer, applySignal
 │       │   ├── vad-monitor.js      # startVadMonitor(stream, { prefsRef, onSpeakingChange }) — reusable RMS-based VAD; returns { stop }
-│       │   ├── use-audio-preferences.js # useAudioPreferences() — reactive localStorage-backed audio prefs (input/output devices, echo cancellation, noise suppression, auto gain control, VAD sensitivity) with prefsRef for hot loops
+│       │   ├── use-audio-preferences.js # useAudioPreferences() — reactive localStorage-backed audio prefs (input/output devices, echo cancellation, noise suppression, auto gain control, RNNoise, VAD sensitivity) with prefsRef for hot loops
 │       │   ├── audio-notifications.js # playNotification(url, volume) — cached notification sound playback; SOUND_ENTER_VOICE / SOUND_EXIT_VOICE constants
 │       │   ├── use-latest.js       # useLatest(value) — returns a stable ref that always holds the latest value (replaces manual ref-mirror pattern)
 │       │   ├── use-live-media-config.js # useLiveMediaConfig() — initialises LIVE_MEDIA_CONFIG once, exposes iceServers / audioConfig / screenshareConfig
@@ -100,6 +100,7 @@ microcord/
 │       │   ├── use-user.js         # Auth (register/login/logout), access/refresh token management, authedFetch interceptor, profile update, avatar upload
 │       │   ├── use-chat.js         # Paginated messages (per-channel via channel_id), subscribe to chat_message / presence events via useRealtime, presence tracking (online user IDs), setUserAdmin
 │       │   ├── use-channels.js     # Channel state management: fetch, WS subscriptions (presence_init, channel_created/updated/deleted), create/rename/delete, active channel tracking, unread counts
+│       │   ├── use-rnnoise.js      # createRnnoiseStream(micStream) — routes the mic through an AudioWorklet running the RNNoise WASM denoiser (when the RNNoise pref is on)
 │       │   ├── use-voice.js        # Thin orchestrator composing useVoiceMesh + useVoiceParticipants + VAD; join/leave state machine, mute toggle, cleanup ownership
 │       │   ├── use-screenshare.js  # WebRTC mesh via createPeerMap, signaling over useRealtime
 │       │   └── use-theme.js        # Light/dark theme toggle, persisted in localStorage
@@ -111,7 +112,7 @@ microcord/
 │       │   ├── sidebar/
 │       │   │   ├── sidebar.jsx             # Voice channel, participant list, VAD speaking indicator, screenshare controls
 │       │   │   ├── server-setup-modal.jsx  # Admin server setup modal (channel management, account recovery for owner)
-│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, audio filter checkboxes (echo cancellation / noise suppression / auto gain control), VAD sensitivity slider with live mic indicator, server admin button (admin/owner only)
+│       │   │   ├── user-profile-modal.jsx  # Profile edit, audio device selection, audio filter checkboxes (echo cancellation / noise suppression / auto gain control / use-RNNoise, shown while NS is on), VAD sensitivity slider with live mic indicator, server admin button (admin/owner only)
 │       │   │   └── sidebar.module.css
 │       │   ├── chat/
 │       │       │   ├── chat-panel.jsx          # Message list, scroll/pagination, screenshare split, header bar with channel tabs, context menu for rename/delete, create channel modal
@@ -380,9 +381,9 @@ Starlette is provided transitively through Connexion.
 
 ### Voice
 
-1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, Opus settings) via `useLiveMediaConfig()`. Echo cancellation, noise suppression, and auto gain control are not part of this config — they are per-user client-side preferences read from `useAudioPreferences` (localStorage keys `mc-echo-cancellation`, `mc-noise-suppression`, `mc-auto-gain-control`; default `true`), toggled via checkboxes in the profile modal.
+1. Client initializes live media config from `GET /api/livemediaconfig` (ICE servers, Opus settings) via `useLiveMediaConfig()`. Echo cancellation, noise suppression, and auto gain control are not part of this config — they are per-user client-side preferences read from `useAudioPreferences` (localStorage keys `mc-echo-cancellation`, `mc-noise-suppression`, `mc-auto-gain-control`; default `true`), toggled via checkboxes in the profile modal. The optional RNNoise engine is a fourth such pref (`mc-rnnoise`, default `true`, visible only while Noise Suppression is on) — when both are set, the mic is denoised by an RNNoise AudioWorklet instead of the browser's built-in suppression (see step 3).
 2. `useVoice.join()` (orchestrator) transitions through a state machine: `idle → joining → joined` (or back to `idle` on error).
-3. On `joining`: acquire mic stream via `getUserMedia` (echo cancellation / noise suppression / auto gain control plus input device constraints from `useAudioPreferences`), then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
+3. On `joining`: acquire mic stream via `getUserMedia` (echo cancellation / noise suppression / auto gain control plus input device constraints from `useAudioPreferences`; when RNNoise is active the browser's `noiseSuppression` constraint is forced off to avoid double processing), optionally routed through `createRnnoiseStream()` from `use-rnnoise.js` — `AudioContext → AudioWorkletNode(rnnoise-processor, module served from /worklets/) → MediaStreamDestination`, swapping the processed stream into `streamRef` so the mesh and VAD run on denoised audio (on worklet failure the raw mic stream is kept and a warning logged). Then `POST /api/voice/join`. If the backend join succeeds but later setup (VAD, WebRTC offers) fails, the hook rolls back with `POST /api/voice/leave`.
 4. `voice_participant_joined` broadcast to all WS clients.
 5. Joiner sends SDP offers via `useVoiceMesh.sendOffersToParticipants()` — creates an `RTCPeerConnection` (mesh) to each existing participant through `createPeerMap()` from `webrtc-helpers.js`. SDP is munged via `voice-sdp.js` (`mungeOpusSdp`) to apply Opus bitrate/stereo settings.
 6. Existing participants receive offers, create answers, and send them back via `voice_signal`.

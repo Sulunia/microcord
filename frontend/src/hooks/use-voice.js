@@ -7,6 +7,7 @@ import { startVadMonitor } from './vad-monitor.js';
 import { useLatest } from './use-latest.js';
 import { useVoiceMesh } from './use-voice-mesh.js';
 import { useVoiceParticipants } from './use-voice-participants.js';
+import { createRnnoiseStream } from './use-rnnoise.js';
 
 /**
  * Voice-channel hook — thin orchestrator composing focused modules.
@@ -30,6 +31,7 @@ export function useVoice(user) {
     const [activeChannelId, setActiveChannelId] = useState(null);
 
     const streamRef = useRef(null);
+    const rnnoiseRef = useRef(null);
     const vadMonitorRef = useRef(null);
     const vadSpeakingRef = useRef(false);
     const targetChannelIdRef = useRef(null);
@@ -107,6 +109,8 @@ export function useVoice(user) {
 
     const disposeLocalVoice = useCallback(() => {
         stopVad();
+        rnnoiseRef.current?.dispose();
+        rnnoiseRef.current = null;
         streamRef.current?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
     }, [stopVad]);
@@ -148,17 +152,26 @@ export function useVoice(user) {
         let backendJoined = false;
 
         try {
-            const { echoCancellation, noiseSuppression, autoGainControl, inputDevice } = prefsRef.current;
+            const { echoCancellation, noiseSuppression, autoGainControl, inputDevice, rnnoiseEnabled } = prefsRef.current;
+            const useRnnoise = noiseSuppression && rnnoiseEnabled; // master switch gates the engine
             const audioConstraints = {
                 echoCancellation,
-                noiseSuppression,
+                noiseSuppression: useRnnoise ? false : noiseSuppression, // no double suppression
                 autoGainControl,
                 ...(inputDevice ? { deviceId: { exact: inputDevice } } : {}),
             };
 
             let noInputDevice = false;
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+                let stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+                if (useRnnoise) {
+                    try {
+                        rnnoiseRef.current = await createRnnoiseStream(stream);
+                        stream = rnnoiseRef.current.stream;
+                    } catch (err) {
+                        console.warn('rnnoise unavailable, using browser noise suppression instead:', err);
+                    }
+                }
                 streamRef.current = stream;
             } catch (micErr) {
                 console.warn('No input device available, joining muted:', micErr.message || micErr);
