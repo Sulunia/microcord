@@ -6,6 +6,7 @@ import {
     ECHO_CANCELLATION_KEY,
     NOISE_SUPPRESSION_KEY,
     AUTO_GAIN_CONTROL_KEY,
+    RNNOISE_KEY,
 } from '../constants.js';
 import { useLatest } from './use-latest.js';
 
@@ -38,8 +39,11 @@ export function useAudioPreferences() {
     const [autoGainControl, setAutoGainControlState] = useState(
         () => readBool(AUTO_GAIN_CONTROL_KEY, true),
     );
+    const [rnnoiseEnabled, setRnnoiseState] = useState(
+        () => readBool(RNNOISE_KEY, true),
+    );
 
-    const prefsRef = useLatest({ inputDevice, outputDevice, vadSensitivity, echoCancellation, noiseSuppression, autoGainControl });
+    const prefsRef = useLatest({ inputDevice, outputDevice, vadSensitivity, echoCancellation, noiseSuppression, autoGainControl, rnnoiseEnabled });
 
     const setInput = useCallback((deviceId) => {
         localStorage.setItem(AUDIO_INPUT_KEY, deviceId);
@@ -73,6 +77,11 @@ export function useAudioPreferences() {
         setAutoGainControlState(value);
     }, []);
 
+    const setRnnoise = useCallback((value) => {
+        localStorage.setItem(RNNOISE_KEY, String(value));
+        setRnnoiseState(value);
+    }, []);
+
     return {
         inputDevice,
         outputDevice,
@@ -80,6 +89,7 @@ export function useAudioPreferences() {
         echoCancellation,
         noiseSuppression,
         autoGainControl,
+        rnnoiseEnabled,
         prefsRef,
         setInput,
         setOutput,
@@ -87,5 +97,6 @@ export function useAudioPreferences() {
         setEchoCancellation,
         setNoiseSuppression,
         setAutoGainControl,
+        setRnnoise,
     };
 }
